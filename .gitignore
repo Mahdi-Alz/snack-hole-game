@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output (npm run build, and the snapshot the Play launcher serves)
+dist/
+.play/
+
+# Local macOS double-click launcher
+*.command
+
+# Playwright screenshots (npm run smoke); keep the one README.md shows
+screenshots/*
+!screenshots/desktop-05-biground.png
+
+# Local Claude Code config
+.claude/
+
+# OS and editor files
+.DS_Store
+*.log
+.vscode/
+.idea/
