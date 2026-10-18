@@ -79,9 +79,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .section { margin: 6px 2px 2px; }
 .section-title { font-weight: 900; font-size: 17px; }
 .section-sub { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
-.bulk-row { display: flex; gap: 6px; align-items: center; justify-content: flex-end; font-weight: 800; font-size: 13px; color: var(--ink-soft); }
-.bulk-btn { border: 0; background: #ece6ff; padding: 4px 12px; border-radius: 999px; font-weight: 800; cursor: pointer; color: var(--ink); }
-.bulk-btn.on { background: var(--violet); color: #fff; }
 
 .card { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: var(--radius); padding: 10px; box-shadow: 0 2px 0 #e3dcfa; border: 2px solid transparent; transition: border-color .2s, transform .15s; }
 .card.affordable { border-color: #b8f0cf; }

@@ -52,7 +52,6 @@ function loadRaw(): string | null {
 
 export class Game implements HubApi {
   save: SaveData;
-  bulk: 1 | 10 | 'max' = 1;
   readonly renderer: GameRenderer;
   readonly audio = new Audio();
   readonly input: Input;
@@ -286,6 +285,13 @@ export class Game implements HubApi {
     s.mapBest[mapId] = Math.max(s.mapBest[mapId], pct);
     const completed = pct >= 0.9995 && !s.map100[mapId];
     if (completed) s.map100[mapId] = true;
+    eco.noteRound(s, mapId, w.main.level, total);
+    // Reaching a map's size goal unlocks the next one; jump straight to it.
+    for (const id of eco.unlockMaps(s)) {
+      const m = eco.mapDef(id);
+      s.selectedMap = id;
+      toast(`${m.name} unlocked!`, m.sizeOffset ? `A bigger world: you start ${m.sizeOffset} sizes smaller here.` : 'Everything is worth more here.', { icon: m.icon });
+    }
     this.grantAchievements();
     this.persist();
     // A cleared map already played the big fanfare when it happened.
@@ -296,6 +302,8 @@ export class Game implements HubApi {
         cash: total,
         helperCash: w.helperCash,
         bonus: warmupBonus,
+        timeBonus: w.timeBonus,
+        endReason: w.endReason ?? 'timeUp',
         passiveCash: 0,
         eaten: w.eaten + w.helperEaten,
         gold: w.goldEaten,
@@ -318,7 +326,7 @@ export class Game implements HubApi {
   // ------------------------------------------------------------------ frame
   private frame(now: number): void {
     const t0 = performance.now();
-    const realDt = Math.min(0.1, (now - this.last) / 1000);
+    const realDt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     const paused = this.pauseMenu !== null;
     // Landmark slow-motion: drops to 30% speed and eases back over SLOWMO seconds.
@@ -332,10 +340,6 @@ export class Game implements HubApi {
     const dt = paused ? 0 : realDt * this.warp * timeScale;
     const s = this.save;
     if (!paused) s.stats.playSeconds += realDt;
-
-    // Passive helper income ticks in real time everywhere.
-    const rate = eco.passiveIncome(s);
-    if (rate > 0) eco.earn(s, rate * realDt * this.warp);
 
     const w = this.world;
     if (w && !paused) {
@@ -440,6 +444,11 @@ export class Game implements HubApi {
           this.audio.fanfare(true);
           this.renderer.shake(1);
           this.hud.banner('MAP CLEARED!', 'You ate absolutely everything', 'big');
+          break;
+        case 'snackedOut':
+          this.hud.hideHint();
+          this.audio.whistle();
+          this.hud.banner('ALL SNACKED OUT!', e.bonusFrac > 0 ? `Time bonus +${Math.round(e.bonusFrac * 100)}%` : 'Nothing left your size', 'big');
           break;
         case 'end':
           if (this.state === 'round') this.endRound();
@@ -552,17 +561,10 @@ export class Game implements HubApi {
     } else this.audio.deny();
   }
 
-  setBulk(b: 1 | 10 | 'max'): void {
-    this.bulk = b;
-    this.audio.click();
-    this.hub.markDirty();
-  }
-
   buyUpgrade(id: UpgradeId): void {
-    const n = eco.bulkCount(this.save, id, this.bulk);
     const before = this.save.upgrades[id];
     const firstEver = Object.values(this.save.upgrades).every((v) => v === 0);
-    const got = eco.buyUpgrade(this.save, id, Math.max(1, n));
+    const got = eco.buyUpgrade(this.save, id, 1);
     this.afterPurchase(got > 0, firstEver || before + got >= eco.upgradeDef(id).max);
   }
 
@@ -579,16 +581,6 @@ export class Game implements HubApi {
     const ok = eco.buyAbility(this.save, id);
     this.afterPurchase(ok, was === 0);
     if (ok && was === 0) toast(`${eco.abilityDef(id).name} unlocked!`, `Press ${eco.abilityDef(id).key} during a round.`, { icon: eco.abilityDef(id).icon });
-  }
-
-  buyMap(id: MapId): void {
-    const ok = eco.buyMap(this.save, id);
-    this.afterPurchase(ok, true);
-    if (ok) {
-      const m = eco.mapDef(id);
-      toast(`${m.name} unlocked!`, `Everything is worth x${m.valueMul}, but you start ${m.sizeOffset} sizes smaller here.`, { icon: m.icon });
-      this.selectMap(id);
-    }
   }
 
   selectMap(id: MapId): void {
@@ -625,7 +617,7 @@ export class Game implements HubApi {
   }
 
   prestige(): void {
-    const dm = eco.dmForRunCash(this.save.runCash);
+    const dm = eco.dmGain(this.save);
     if (dm <= 0) {
       this.audio.deny();
       return;

@@ -1,5 +1,6 @@
 import { formatCash, formatDuration, formatNumber, formatPercent } from '../core/format';
 import type { Settings } from '../core/save';
+import type { EndReason } from '../core/world';
 import { h } from './dom';
 
 let layer: HTMLDivElement | null = null;
@@ -120,6 +121,9 @@ export interface RoundResult {
   helperCash: number;
   passiveCash: number;
   bonus: number;
+  /** Paid for finishing early; included in `cash`. */
+  timeBonus: number;
+  endReason: EndReason;
   eaten: number;
   /** Golden props swallowed. */
   gold: number;
@@ -153,9 +157,10 @@ export function showResults(r: RoundResult, onContinue: () => void): void {
   const content = h(
     'div',
     { class: 'results' },
-    h('div', { class: 'res-title' }, r.percent >= 0.9995 ? '🍽️ MAP CLEARED!' : "TIME'S UP!"),
+    h('div', { class: 'res-title' }, r.endReason === 'cleared' ? '🍽️ MAP CLEARED!' : r.endReason === 'snackedOut' ? '😋 ALL SNACKED OUT!' : "TIME'S UP!"),
     h('div', { class: 'res-sub' }, r.mapName),
     cashEl,
+    r.timeBonus > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.timeBonus)} time bonus for finishing early`) : null,
     r.helperCash > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.helperCash)} from helper holes`) : null,
     r.bonus > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.bonus)} warm-up bonus — go buy an upgrade!`) : null,
     h(
@@ -192,7 +197,7 @@ export function showOffline(seconds: number, credited: number, earned: number, c
       { class: 'offline' },
       h('div', { class: 'offline-icon' }, '🌙'),
       h('h2', null, 'While you were away'),
-      h('p', { class: 'modal-text' }, `You were gone for ${formatDuration(seconds)}. Your helper holes kept munching${capped ? ` (capped at ${formatDuration(credited)})` : ''}.`),
+      h('p', { class: 'modal-text' }, `You were gone for ${formatDuration(seconds)}. Your hole kept snacking${capped ? ` (capped at ${formatDuration(credited)})` : ''}.`),
       h('div', { class: 'res-cash' }, `+${formatCash(earned)}`),
       h('button', { class: 'btn primary big', onclick: () => m.close() }, 'Collect'),
     ),

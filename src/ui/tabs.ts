@@ -18,13 +18,12 @@ import {
   abilityCooldown,
   abilityCost,
   abilityDuration,
-  bulkCount,
   cashBreakdown,
   completedSets,
-  dmForRunCash,
+  dmForLifetime,
+  dmGain,
   dmLevel,
   dmUpgradeCost,
-  geomBulkCost,
   gulpSetTypes,
   headStartCash,
   helperCountCost,
@@ -32,8 +31,12 @@ import {
   helperRadius,
   isAbilityVisible,
   isUpgradeVisible,
-  passiveIncome,
-  runCashForDm,
+  lifetimeForDm,
+  mapLockReason,
+  prestigeUnlocked,
+  tierDmMult,
+  tierUpReady,
+  upgradeCost,
   upgradeEffectText,
 } from '../core/economy';
 import { formatCash, formatNumber, formatPercent, formatRate } from '../core/format';
@@ -44,13 +47,10 @@ import { h } from './dom';
 
 export interface HubApi {
   save: SaveData;
-  bulk: 1 | 10 | 'max';
-  setBulk(b: 1 | 10 | 'max'): void;
   buyUpgrade(id: UpgradeId): void;
   buyHelper(): void;
   buyHelperLevel(): void;
   buyAbility(id: AbilityId): void;
-  buyMap(id: MapId): void;
   selectMap(id: MapId): void;
   buyDm(id: DmUpgradeId): void;
   prestige(): void;
@@ -71,8 +71,8 @@ export const TABS: TabDef[] = [
   { id: 'upgrades', icon: '⭕', name: 'Upgrades', visible: () => true },
   { id: 'helpers', icon: '👯', name: 'Helpers', visible: (s) => s.runCash >= HELPERS.unlockAt * 0.6 || s.helpers > 0 || s.stats.prestiges > 0 },
   { id: 'abilities', icon: '⚡', name: 'Abilities', visible: (s) => s.runCash >= ABILITIES[0].unlockAt * 0.6 || s.stats.prestiges > 0 },
-  { id: 'maps', icon: '🗺️', name: 'Maps', visible: (s) => s.runCash >= MAPS[1].cost * 0.3 || s.stats.prestiges > 0 },
-  { id: 'singularity', icon: '🕳️', name: 'Singularity', visible: (s) => s.runCash >= PRESTIGE.minRunCash * 0.25 || s.stats.prestiges > 0 },
+  { id: 'maps', icon: '🗺️', name: 'Maps', visible: (s) => s.stats.rounds >= 2 || s.stats.prestiges > 0 },
+  { id: 'singularity', icon: '🕳️', name: 'Singularity', visible: (s) => s.maps.farm || s.stats.prestiges > 0 },
   { id: 'gulpedia', icon: '📖', name: 'Gulpedia', visible: (s) => s.stats.rounds >= 1 },
   { id: 'trophies', icon: '🏆', name: 'Trophies', visible: (s) => s.achievements.length > 0 },
   { id: 'skins', icon: '🎨', name: 'Skins', visible: (s) => s.skins.length > 1 || s.stats.prestiges > 0 },
@@ -83,13 +83,6 @@ const cost = (n: number) => formatCash(n);
 function upgradesTab(api: HubApi, cards: Card[]): HTMLElement {
   const s = api.save;
   const root = h('div', { class: 'tab-body' });
-  const bulkRow = h('div', { class: 'bulk-row' }, h('span', null, 'Buy'));
-  for (const b of [1, 10, 'max'] as const) {
-    bulkRow.appendChild(
-      h('button', { class: `bulk-btn ${api.bulk === b ? 'on' : ''}`, onclick: () => api.setBulk(b) }, b === 'max' ? 'Max' : `x${b}`),
-    );
-  }
-  root.appendChild(bulkRow);
   if (s.stats.rounds >= 1 && Object.values(s.upgrades).every((v) => v === 0)) {
     root.appendChild(h('div', { class: 'tip' }, '💡 Upgrades are permanent. Buy one, then hit PLAY to go again!'));
   }
@@ -106,20 +99,16 @@ function upgradesTab(api: HubApi, cards: Card[]): HTMLElement {
       icon: d.icon,
       title: d.name,
       desc: d.desc,
-      level: () => (d.max === Infinity ? `Lv ${s.upgrades[d.id]}` : `Lv ${s.upgrades[d.id]}/${d.max}`),
+      level: () => `Lv ${s.upgrades[d.id]}/${d.max}`,
       effect: () => {
         const lvl = s.upgrades[d.id];
         if (lvl >= d.max) return `${upgradeEffectText(d.id, lvl)} (max)`;
-        const n = Math.max(1, bulkCount(s, d.id, api.bulk));
-        return `${upgradeEffectText(d.id, lvl)} → ${upgradeEffectText(d.id, lvl + n)}`;
+        return `${upgradeEffectText(d.id, lvl)} → ${upgradeEffectText(d.id, lvl + 1)}`;
       },
       button: {
-        label: () => `+${Math.max(1, bulkCount(s, d.id, api.bulk))}`,
-        cost: () => cost(geomBulkCost(d.base, d.growth, s.upgrades[d.id], Math.max(1, bulkCount(s, d.id, api.bulk)))),
-        can: () => {
-          const n = Math.max(1, bulkCount(s, d.id, api.bulk));
-          return s.upgrades[d.id] < d.max && s.cash >= geomBulkCost(d.base, d.growth, s.upgrades[d.id], n);
-        },
+        label: () => '+1',
+        cost: () => cost(upgradeCost(d.id, s.upgrades[d.id], s.tier)),
+        can: () => s.upgrades[d.id] < d.max && s.cash >= upgradeCost(d.id, s.upgrades[d.id], s.tier),
         onClick: () => api.buyUpgrade(d.id),
         doneText: () => (s.upgrades[d.id] >= d.max ? 'MAXED' : null),
       },
@@ -133,14 +122,7 @@ function upgradesTab(api: HubApi, cards: Card[]): HTMLElement {
 function helpersTab(api: HubApi, cards: Card[]): HTMLElement {
   const s = api.save;
   const root = h('div', { class: 'tab-body' });
-  const rate = h('div', { class: 'big-stat' });
-  cards.push({
-    el: rate,
-    update: () => {
-      rate.textContent = s.helpers > 0 ? `+${formatCash(passiveIncome(s)).replace('$', '$')}/s passive` : 'Helpers earn cash even while you are away.';
-    },
-  });
-  root.appendChild(rate);
+  root.appendChild(section('Helper Holes', 'Mini holes that roam during rounds and eat small props for you.'));
   if (s.runCash < HELPERS.unlockAt && s.helpers === 0) {
     root.appendChild(lockedCard('👯', 'Helper Holes', `Earn ${cost(HELPERS.unlockAt)} total to unlock.`));
     return root;
@@ -148,13 +130,13 @@ function helpersTab(api: HubApi, cards: Card[]): HTMLElement {
   const count = card({
     icon: '🕳️',
     title: 'Helper Holes',
-    desc: 'Mini holes roam during rounds eating small props (60% value) and earn passive cash.',
+    desc: `Each one roams during rounds and eats small props for ${Math.round(HELPERS.roundCashShare * 100)}% of their value.`,
     level: () => `${s.helpers}/${HELPERS.countCosts.length}`,
     effect: () => `${s.helpers} → ${Math.min(HELPERS.countCosts.length, s.helpers + 1)} helpers`,
     button: {
       label: () => '+1',
-      cost: () => cost(helperCountCost(s.helpers)),
-      can: () => s.cash >= helperCountCost(s.helpers),
+      cost: () => cost(helperCountCost(s.helpers, s.tier)),
+      can: () => s.cash >= helperCountCost(s.helpers, s.tier),
       onClick: () => api.buyHelper(),
       doneText: () => (s.helpers >= HELPERS.countCosts.length ? 'MAXED' : null),
     },
@@ -165,13 +147,16 @@ function helpersTab(api: HubApi, cards: Card[]): HTMLElement {
     const lvl = card({
       icon: '📶',
       title: 'Helper Training',
-      desc: 'Bigger helpers eat bigger props and earn +12% passive income per level.',
+      desc: 'Bigger helpers eat bigger props.',
       level: () => `Lv ${s.helperLevel}/${HELPERS.levelMax}`,
-      effect: () => `radius ${helperRadius(s.helperLevel).toFixed(2)}m → ${helperRadius(s.helperLevel + 1).toFixed(2)}m`,
+      effect: () => {
+        const q = dmLevel(s, 'quantumHelpers');
+        return `radius ${helperRadius(s.helperLevel, q).toFixed(2)}m → ${helperRadius(s.helperLevel + 1, q).toFixed(2)}m`;
+      },
       button: {
         label: () => '+1',
-        cost: () => cost(helperLevelCost(s.helperLevel)),
-        can: () => s.cash >= helperLevelCost(s.helperLevel),
+        cost: () => cost(helperLevelCost(s.helperLevel, s.tier)),
+        can: () => s.cash >= helperLevelCost(s.helperLevel, s.tier),
         onClick: () => api.buyHelperLevel(),
         doneText: () => (s.helperLevel >= HELPERS.levelMax ? 'MAXED' : null),
       },
@@ -209,8 +194,8 @@ function abilitiesTab(api: HubApi, cards: Card[]): HTMLElement {
       },
       button: {
         label: () => (s.abilities[a.id] === 0 ? 'Unlock' : '+1'),
-        cost: () => cost(abilityCost(a.id, s.abilities[a.id])),
-        can: () => s.cash >= abilityCost(a.id, s.abilities[a.id]),
+        cost: () => cost(abilityCost(a.id, s.abilities[a.id], s.tier)),
+        can: () => s.cash >= abilityCost(a.id, s.abilities[a.id], s.tier),
         onClick: () => api.buyAbility(a.id),
         doneText: () => (s.abilities[a.id] >= a.maxLevel ? 'MAXED' : null),
       },
@@ -224,24 +209,28 @@ function abilitiesTab(api: HubApi, cards: Card[]): HTMLElement {
 function mapsTab(api: HubApi, cards: Card[]): HTMLElement {
   const s = api.save;
   const root = h('div', { class: 'tab-body' });
-  root.appendChild(section('Maps', `Eat 100% of a map for a permanent +${MAP_COMPLETE_BONUS * 100}% cash bonus.`));
+  root.appendChild(section('Maps', `Reach the size goal on a map to unlock the next one. Eat 100% of a map for a permanent +${MAP_COMPLETE_BONUS * 100}% cash bonus.`));
   MAPS.forEach((m, i) => {
-    const prevOwned = i === 0 || s.maps[MAPS[i - 1].id];
-    if (!s.maps[m.id] && !prevOwned) {
-      root.appendChild(lockedCard(m.icon, m.name, `Unlock ${MAPS[i - 1].name} first.`));
+    if (!s.maps[m.id]) {
+      root.appendChild(lockedCard(m.icon, m.name, `${mapLockReason(s, m.id) ?? 'Play a round to unlock'}.`));
       return;
     }
+    const next = MAPS[i + 1];
     const c = card({
       icon: m.icon,
       title: m.name,
       cls: s.selectedMap === m.id ? 'selected' : '',
-      desc: `${m.blurb} Value x${m.valueMul}.${m.sizeOffset ? ` Bigger world: your hole starts ${m.sizeOffset} sizes smaller and grows slower.` : ''}`,
-      level: () => (s.map100[m.id] ? '✅ 100%' : s.maps[m.id] ? `best ${formatPercent(s.mapBest[m.id])}` : ''),
+      desc: `${m.blurb}${m.sizeOffset ? ` A bigger world: you start ${m.sizeOffset} sizes smaller here.` : ''}`,
+      level: () => (s.map100[m.id] ? '✅ 100%' : `best ${formatPercent(s.mapBest[m.id])}`),
+      effect: () =>
+        next && !s.maps[next.id]
+          ? `Goal: size ${m.goal + 1} (best ${s.mapLevel[m.id] + 1}) → ${next.name}`
+          : `Best size ${s.mapLevel[m.id] + 1}`,
       button: {
-        label: () => (s.maps[m.id] ? 'Select' : 'Unlock'),
-        cost: () => (s.maps[m.id] ? '' : cost(m.cost)),
-        can: () => (s.maps[m.id] ? true : s.cash >= m.cost),
-        onClick: () => (s.maps[m.id] ? api.selectMap(m.id) : api.buyMap(m.id)),
+        label: () => 'Select',
+        cost: () => '',
+        can: () => true,
+        onClick: () => api.selectMap(m.id),
         doneText: () => (s.selectedMap === m.id ? 'PLAYING' : null),
       },
     });
@@ -265,15 +254,25 @@ function singularityTab(api: HubApi, cards: Card[]): HTMLElement {
   cards.push({
     el: gain,
     update: () => {
-      const dm = dmForRunCash(s.runCash);
-      gain.textContent = dm > 0 ? `+${formatNumber(dm)} Dark Matter` : 'Not enough mass yet';
-      const next = runCashForDm(dm + 1);
-      const prev = dm > 0 ? runCashForDm(dm) : 0;
-      const frac = Math.min(1, Math.max(0, (s.runCash - prev) / (next - prev)));
+      const dm = dmGain(s);
+      const unlocked = prestigeUnlocked(s);
+      if (!unlocked) gain.textContent = `Unlock ${MAPS.find((m) => m.id === PRESTIGE.unlockMap)!.name} to collapse`;
+      else if (dm > 0) {
+        const pct = s.dmTotal > 0 ? ` (+${Math.round((dm / s.dmTotal) * 100)}%)` : '';
+        const after = (1 + PRESTIGE.bonusPerDm * (s.dmTotal + dm)) / (1 + PRESTIGE.bonusPerDm * s.dmTotal);
+        gain.textContent = `+${formatNumber(dm)} Dark Matter${pct} · income x${after.toFixed(2)} after`;
+      } else gain.textContent = 'Not enough mass yet';
+      // Progress toward the next whole DM from the lifetime-cash formula.
+      const have = dmForLifetime(s.lifetimeCash);
+      const next = lifetimeForDm(have + 1);
+      const prev = lifetimeForDm(have);
+      const frac = Math.min(1, Math.max(0, (s.lifetimeCash - prev) / (next - prev)));
       bar.style.width = `${(frac * 100).toFixed(1)}%`;
-      barText.textContent = `${formatCash(s.runCash)} / ${formatCash(next)} for ${dm > 0 ? 'next' : 'first'} DM`;
+      barText.textContent = `${formatCash(s.lifetimeCash)} / ${formatCash(next)} lifetime for the next DM`;
       btn.disabled = dm <= 0;
-      info.textContent = `Resets cash, upgrades, helpers, abilities${dmLevel(s, 'wormhole') ? '' : ' and maps'}. Each DM ever earned gives +${PRESTIGE.bonusPerDm * 100}% cash forever (you have ${formatNumber(s.dmTotal)}).${headStartCash(s) > 0 ? ` Head Start gives ${formatCash(headStartCash(s))}.` : ''}`;
+      const worth = s.dmTotal > 0 && dm >= s.dmTotal * 0.5 ? ' Good time to collapse: +50% or more.' : '';
+      const tier = s.tier > 0 || tierUpReady(s) ? ` Tier ${s.tier}${tierUpReady(s) ? ` → ${s.tier + 1} on collapse (bigger world, x${PRESTIGE.tierScale} payouts and prices, DM x${tierDmMult(s.tier + 1).toFixed(1)})` : ''}.` : '';
+      info.textContent = `Resets cash, upgrades, helpers, abilities${dmLevel(s, 'wormhole') ? '' : ' and maps'}. Each DM ever earned gives +${PRESTIGE.bonusPerDm * 100}% cash forever (you have ${formatNumber(s.dmTotal)}).${headStartCash(s) > 0 ? ` Head Start gives ${formatCash(headStartCash(s))}.` : ''}${worth}${tier}`;
     },
   });
   root.appendChild(section('Dark Matter Tree', `Unspent: ${formatNumber(s.dm)} DM`));

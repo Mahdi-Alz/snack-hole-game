@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { GOLDEN, MAPS } from '../src/config/balance';
-import { OBJECT_TYPES } from '../src/config/objects';
+import { GOLDEN, MAPS, ROUND_END, SAVE_VERSION, SIZE } from '../src/config/balance';
+import { OBJECT_TYPES, footprintOf, typeId } from '../src/config/objects';
 import { Bot } from '../src/core/bot';
-import { buildRoundConfig } from '../src/core/economy';
+import { buildRoundConfig, radiusForLevel, timeBonusFrac } from '../src/core/economy';
 import { generateMap } from '../src/core/mapgen';
 import { MapBuilder } from '../src/core/mapgen/builder';
 import { defaultSave, deserialize, migrate, serialize } from '../src/core/save';
@@ -111,7 +111,7 @@ describe('swallowing', () => {
   });
 
   it('ends the round after the timer runs out', () => {
-    const w = new World(tinyMap(), cfg());
+    const w = new World(generateMap('suburb'), cfg());
     let ended = false;
     for (let i = 0; i < 30 * 70 && !ended; i++) {
       w.step(1 / 30);
@@ -119,6 +119,50 @@ describe('swallowing', () => {
       w.events.length = 0;
     }
     expect(ended).toBe(true);
+  });
+});
+
+describe('round end', () => {
+  const theme = { sky: '#fff', fog: '#fff', sun: '#fff', hemiSky: '#fff', hemiGround: '#000', sunIntensity: 1 };
+  /** `small` cones far from the hole plus one cone scaled to footprint `bigF`. */
+  function ladderMap(small: number, bigF: number) {
+    const b = new MapBuilder('suburb', 200, 1);
+    for (let i = 0; i < small; i++) b.put('cone', 30 + i * 1.5, 30, 0, { force: true });
+    b.put('cone', -30, -30, 0, { force: true, scale: bigF / footprintOf(OBJECT_TYPES[typeId('cone')]) });
+    return b.build('#000', '#000', theme);
+  }
+  const fitAt = (level: number) => SIZE.fit * radiusForLevel(level);
+
+  it('counts props it could grow into on the XP of everything that fits now', () => {
+    const big = fitAt(1) * 0.98;
+    expect(new World(ladderMap(0, big), cfg()).reachableLeft()).toBe(0);
+    expect(new World(ladderMap(40, big), cfg()).reachableLeft()).toBe(41);
+  });
+
+  it('counts what Mega Mouth will fit while it can still be used', () => {
+    const big = fitAt(0) * 1.2;
+    const s = defaultSave(0);
+    s.stats.rounds = 1;
+    expect(new World(ladderMap(0, big), buildRoundConfig(s)).reachableLeft()).toBe(0);
+    s.abilities.mega = 1;
+    expect(new World(ladderMap(0, big), buildRoundConfig(s)).reachableLeft()).toBe(1);
+  });
+
+  it('counts the round as done when it cannot grow and only crumbs are left', () => {
+    const w = new World(ladderMap(3, 0.3), cfg(12));
+    expect(w.reachable().levels).toBe(0);
+    expect(w.snackedOut()).toBe(false);
+    w.cash = (w.reachable().cash / ROUND_END.crumbs) * 2;
+    expect(w.snackedOut()).toBe(true);
+  });
+
+  it('finishes early with a time bonus once nothing reachable is left', () => {
+    const w = new World(tinyMap(), cfg());
+    for (let i = 0; i < 30 * 5 && !w.ended; i++) w.step(1 / 30);
+    expect(w.ended).toBe(true);
+    expect(w.endReason).toBe('snackedOut');
+    expect(w.timeLeft).toBeGreaterThan(50);
+    expect(w.timeBonus).toBeCloseTo((w.cash - w.timeBonus) * timeBonusFrac(w.timeLeft));
   });
 });
 
@@ -194,17 +238,20 @@ describe('save', () => {
     expect(back.cash).toBe(123);
     expect(back.gulpedia.car).toBe(2);
     expect(back.flags.tab_maps).toBe(true);
-    const partial = migrate({ cash: 50, upgrades: { speed: 3 } }, 0);
+    const partial = migrate({ version: SAVE_VERSION, cash: 50, upgrades: { speed: 3 } }, 0);
     expect(partial.cash).toBe(50);
     expect(partial.upgrades.speed).toBe(3);
     expect(partial.upgrades.startSize).toBe(0);
+    expect(partial.mapLevel.suburb).toBe(0);
     expect(partial.settings.volume).toBeGreaterThan(0);
   });
 
-  it('resets best % records from before area-weighted map %', () => {
-    const old = migrate({ version: 1, mapBest: { suburb: 0.4, farm: 1 }, map100: { farm: true } }, 0);
-    expect(old.mapBest.suburb).toBe(0);
-    expect(old.mapBest.farm).toBe(1);
+  it('starts fresh from saves made before the rebalance, keeping only settings', () => {
+    const old = migrate({ version: 2, cash: 1e9, dm: 40, upgrades: { speed: 30 }, settings: { volume: 0.2 } }, 0);
+    expect(old.cash).toBe(0);
+    expect(old.dm).toBe(0);
+    expect(old.upgrades.speed).toBe(0);
+    expect(old.settings.volume).toBe(0.2);
   });
 
   it('survives garbage', () => {

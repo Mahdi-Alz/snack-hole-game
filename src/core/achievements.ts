@@ -47,7 +47,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'map100', name: 'Clean Plate', desc: 'Eat 100% of any map.', icon: '🍽️', check: (s) => Object.values(s.map100).some(Boolean) },
   { id: 'allmaps', name: 'World Tour', desc: 'Unlock every map.', icon: '🗺️', check: (s) => MAPS.every((m) => s.maps[m.id]) },
   { id: 'helper', name: 'Little Helper', desc: 'Buy a helper hole.', icon: '👶', check: (s) => s.helpers >= 1 },
-  { id: 'helpers6', name: 'Hole Family', desc: 'Own 6 helper holes.', icon: '👨‍👩‍👧‍👦', check: (s) => s.helpers >= 6 },
+  { id: 'helpers4', name: 'Hole Family', desc: 'Own 4 helper holes.', icon: '👨‍👩‍👧‍👦', check: (s) => s.helpers >= 4 },
   { id: 'abilities', name: 'Power Hungry', desc: 'Unlock all abilities.', icon: '⚡', check: (s) => ABILITIES.every((a) => s.abilities[a.id] > 0) },
   { id: 'gulp50', name: 'Collector', desc: 'Discover 50 Gulpedia entries.', icon: '📖', check: (s) => discovered(s) >= 50 },
   { id: 'gulpAll', name: 'Encyclopedic', desc: 'Discover every Gulpedia entry.', icon: '📚', check: (s) => discovered(s) >= OBJECT_TYPES.length },
@@ -55,6 +55,10 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'prestige1', name: 'Singularity', desc: 'Collapse into a Singularity.', icon: '🌌', check: (s) => s.stats.prestiges >= 1 },
   { id: 'prestige3', name: 'Event Horizon', desc: 'Reach 3 Singularities.', icon: '🌠', check: (s) => s.stats.prestiges >= 3, skin: 'void' },
   { id: 'prestige10', name: 'Big Crunch', desc: 'Reach 10 Singularities.', icon: '💥', check: (s) => s.stats.prestiges >= 10 },
+  { id: 'tier1', name: 'Bigger Universe', desc: 'Reach Singularity tier 1.', icon: '🌌', check: (s) => s.tier >= 1, skin: 'nebula' },
+  { id: 'tier3', name: 'Cosmic Appetite', desc: 'Reach Singularity tier 3.', icon: '🌠', check: (s) => s.tier >= 3, skin: 'aurora' },
+  { id: 'tier5', name: 'Star Eater', desc: 'Reach Singularity tier 5.', icon: '☀️', check: (s) => s.tier >= 5, skin: 'supernova' },
+  { id: 'tier10', name: 'End of Everything', desc: 'Reach Singularity tier 10.', icon: '🕳️', check: (s) => s.tier >= 10, skin: 'quasar' },
 ];
 
 /** Grants any newly met achievements; returns them so the UI can celebrate. */

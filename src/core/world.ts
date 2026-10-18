@@ -1,11 +1,13 @@
-import { ABILITIES, ABILITY_LEVEL, EVENTS, GOLDEN, HELPERS, SIZE, type AbilityId } from '../config/balance';
+import { ABILITIES, ABILITY_LEVEL, EVENTS, GOLDEN, HELPERS, ROUND_END, SIZE, type AbilityId } from '../config/balance';
 import { OBJECT_TYPES, baseValueOf, distToSolid, footprintOf, solidShape, typeId, xpOf } from '../config/objects';
 import {
   comboMult,
+  frontierXpMult,
   holeSpeed,
   magnetPull,
   magnetRangeFrac,
   radiusForLevel,
+  timeBonusFrac,
   xpForLevel,
   type RoundConfig,
 } from './economy';
@@ -116,7 +118,11 @@ export type WEvent =
   | { k: 'event'; id: EventId; on: boolean }
   | { k: 'timeUp' }
   | { k: 'cleared' }
+  /** Nothing reachable is left: the round finishes early with a time bonus. */
+  | { k: 'snackedOut'; bonusFrac: number }
   | { k: 'end' };
+
+export type EndReason = 'timeUp' | 'cleared' | 'snackedOut';
 
 export interface AbilityState {
   cd: number;
@@ -207,7 +213,13 @@ export class World {
   timeLeft: number;
   running = true;
   ended = false;
+  endReason: EndReason | null = null;
+  /** Cash paid for finishing early (already included in `cash`). */
+  timeBonus = 0;
   private endDelay = 0;
+  private reachCheck = 0;
+  /** Objects sorted by footprint, for reachableLeft. */
+  private bySize: WObj[] = [];
 
   cash = 0;
   helperCash = 0;
@@ -315,6 +327,8 @@ export class World {
     main.z = map.start.z;
     main.level = cfg.startLevel;
     main.baseR = main.r = radiusForLevel(cfg.startLevel);
+    // Head start on the first size-up so every round opens with a quick level.
+    main.xp = xpForLevel(cfg.startLevel) * SIZE.startXp;
     this.holes.push(main);
 
     for (let i = 0; i < cfg.helpers; i++) {
@@ -583,6 +597,55 @@ export class World {
     return o.f <= SIZE.fit * hole.r;
   }
 
+  /**
+   * What the main hole can still eat this round: the props that fit now, plus the ones that would
+   * fit after growing on all of those (props are taken smallest first, so one pass reaches the
+   * fixed point). While Mega Mouth is active or will recharge before time runs out, the enlarged
+   * mouth counts too. Dormant event props are not counted. `levels` is how many more size levels
+   * that food is worth and `cash` what it would pay (before combo).
+   */
+  reachable(): { count: number; levels: number; cash: number } {
+    if (this.bySize.length !== this.objects.length) this.bySize = [...this.objects].sort((a, b) => a.f - b.f);
+    const mega = this.abilities.mega;
+    const megaUsable = this.cfg.abilities.mega.level > 0 && (mega.active > 0 || mega.cd <= this.timeLeft);
+    const mouth = SIZE.fit * (megaUsable ? ABILITY_LEVEL.megaScale : 1);
+    let level = this.main.level;
+    let xp = this.main.xp;
+    let need = xpForLevel(level);
+    let r = radiusForLevel(level);
+    let fit = mouth * r;
+    let count = 0;
+    let cash = 0;
+    for (const o of this.bySize) {
+      if (o.state !== ALIVE) continue;
+      if (o.f > fit) break;
+      count++;
+      cash += o.value * this.cfg.cashMult;
+      xp += o.xp * this.cfg.xpMult * frontierXpMult(o.f, r);
+      while (xp >= need) {
+        xp -= need;
+        level++;
+        need = xpForLevel(level);
+        r = radiusForLevel(level);
+        fit = mouth * r;
+      }
+    }
+    return { count, levels: level - this.main.level, cash };
+  }
+
+  reachableLeft(): number {
+    return this.reachable().count;
+  }
+
+  /**
+   * The round is over once nothing reachable is left, or once the hole cannot grow any more and
+   * only crumbs remain (worth less than `crumbs` of what this round has paid so far).
+   */
+  snackedOut(): boolean {
+    const r = this.reachable();
+    return r.count === 0 || (r.levels === 0 && r.cash < this.cash * ROUND_END.crumbs);
+  }
+
   // ------------------------------------------------------------ abilities
   abilityReady(id: AbilityId): boolean {
     return this.cfg.abilities[id].level > 0 && this.abilities[id].cd <= 0 && this.running;
@@ -822,7 +885,7 @@ export class World {
     const dx = tx - h.x;
     const dz = tz - h.z;
     const d = Math.hypot(dx, dz);
-    const speed = HELPERS.speed * (1 + 0.4 * h.r) * (this.running ? 1 : 0);
+    const speed = HELPERS.speed * this.cfg.helperSpeedMult * (1 + 0.4 * h.r) * (this.running ? 1 : 0);
     const k = 1 - Math.exp(-5 * dt);
     const ix = d > 0.05 ? dx / d : 0;
     const iz = d > 0.05 ? dz / d : 0;
@@ -930,7 +993,7 @@ export class World {
       if (this.combo > this.comboBest) this.comboBest = this.combo;
       cash = o.value * this.cfg.cashMult * comboMult(this.combo, this.cfg.comboCap);
       if (!this.biggest || o.f > this.biggest.f) this.biggest = o;
-      this.gainXp(o.xp * this.cfg.xpMult);
+      this.gainXp(o.xp * this.cfg.xpMult * frontierXpMult(o.f, H.baseR));
     } else {
       this.helperEaten++;
       cash = o.value * this.cfg.cashMult * HELPERS.roundCashShare;
@@ -989,11 +1052,27 @@ export class World {
       const after = Math.ceil(this.timeLeft);
       if (after < before && after <= 5 && after >= 1) this.events.push({ k: 'tick', s: after });
       const cleared = this.weightEaten >= this.weightTotal * 0.9995;
-      if (this.timeLeft <= 0 || cleared) {
+      let snackedOut = false;
+      if (!cleared && this.timeLeft > 0) {
+        this.reachCheck -= dt;
+        if (this.reachCheck <= 0) {
+          this.reachCheck = ROUND_END.checkEvery;
+          if (!this.eventId && this.snackedOut()) {
+            // A random event still to come brings new snacks: start it now instead of ending.
+            if (this.eventsOn && this.plan.length && this.timeLeft > EVENTS.minLeft) this.eventTimer = 0;
+            else snackedOut = true;
+          }
+        }
+      }
+      if (this.timeLeft <= 0 || cleared || snackedOut) {
         this.timeLeft = Math.max(0, this.timeLeft);
         this.running = false;
-        this.endDelay = cleared ? 2.4 : 1.6;
-        this.events.push({ k: cleared ? 'cleared' : 'timeUp' });
+        this.endReason = cleared ? 'cleared' : snackedOut ? 'snackedOut' : 'timeUp';
+        const bonusFrac = this.endReason === 'timeUp' ? 0 : timeBonusFrac(this.timeLeft);
+        this.timeBonus = this.cash * bonusFrac;
+        this.cash += this.timeBonus;
+        this.endDelay = cleared ? 2.4 : ROUND_END.endDelay;
+        this.events.push(snackedOut ? { k: 'snackedOut', bonusFrac } : { k: cleared ? 'cleared' : 'timeUp' });
         if (this.combo > 0) this.events.push({ k: 'comboEnd', n: this.combo });
         this.combo = 0;
         this.comboTimer = 0;

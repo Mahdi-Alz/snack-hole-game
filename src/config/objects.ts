@@ -3,6 +3,8 @@
  * d = depth along Z, h = height. Footprint radius, cash value and XP are derived from them so
  * the geometry builders in render/props.ts only have to respect these extents.
  */
+import { SIZE, VALUE } from './balance';
+
 export type GulpSet =
   | 'street'
   | 'nature'
@@ -221,12 +223,11 @@ export function distToSolid(s: SolidShape, x: number, z: number, rot: number, px
 export function baseValueOf(t: ObjTypeDef, scale = 1): number {
   const f = footprintOf(t, scale);
   const h = t.h * scale;
-  return Math.max(1, Math.round(4 * f * f * (1 + h / 10) * (t.valueMul ?? 1)));
+  return Math.max(1, Math.round(VALUE.coef * Math.pow(f, VALUE.exp) * (1 + h / VALUE.heightDiv) * (t.valueMul ?? 1)));
 }
 
 export function xpOf(t: ObjTypeDef, scale = 1): number {
-  const f = footprintOf(t, scale);
-  return f * f + 0.2;
+  return Math.pow(footprintOf(t, scale), SIZE.objXpExp);
 }
 
 export const SET_NAMES: Record<GulpSet, string> = {

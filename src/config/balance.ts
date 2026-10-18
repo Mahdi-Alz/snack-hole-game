@@ -6,36 +6,74 @@
 export const SIZE = {
   baseRadius: 0.75,
   radiusGrowth: 1.125,
-  /** XP needed for L -> L+1 is xpCoef * R(L)^xpExp. */
-  xpCoef: 4,
-  xpExp: 3.3,
+  /**
+   * XP needed for L -> L+1 is xpCoef * R(L)^xpExp * ramp(L), and a prop gives
+   * footprint^objXpExp XP. Equal exponents keep the number of your-size props needed per level
+   * constant, so growth does not stall as the hole gets bigger. ramp(L) =
+   * min(1, (L + rampStart) / rampLevels) makes the first few levels quick.
+   */
+  xpCoef: 8,
+  xpExp: 2,
+  objXpExp: 2,
+  rampStart: 2,
+  rampLevels: 8,
+  /** Fraction of the first level's XP the hole starts each round with. */
+  startXp: 0.5,
+  /**
+   * Props close to the hole's size give extra XP: x(1 + frontierBonus * (f / (fit R))^frontierExp).
+   * Sparse top tiers (a few huge landmarks) still grow you; piles of tiny props matter less.
+   */
+  frontierBonus: 3,
+  frontierExp: 3,
   /** Object fits when footprint <= fit * R. */
   fit: 0.9,
   speedBase: 4.5,
   speedPerRadius: 2.1,
 };
 
+/**
+ * Cash value of a prop: coef * footprint^exp * (1 + height / heightDiv) * type multiplier. A low
+ * exponent keeps income growing steadily with size instead of jumping when a tier of big props
+ * becomes edible.
+ */
+export const VALUE = { coef: 6, exp: 1.3, heightDiv: 20 };
+
 export const ROUND = {
-  baseTime: 50,
+  baseTime: 60,
   warmupTime: 20,
-  perLevel: 5,
+  perLevel: 10,
+};
+
+/**
+ * A round ends early once nothing reachable is left, or once the hole cannot grow any more and
+ * the reachable leftovers would pay less than `crumbs` x the round's cash so far (see
+ * World.snackedOut). It pays a bonus of `bonusPerSecond` x round cash per second left, up to
+ * `bonusCap`.
+ */
+export const ROUND_END = {
+  crumbs: 0.05,
+  checkEvery: 0.5,
+  endDelay: 1.6,
+  bonusPerSecond: 0.01,
+  bonusCap: 0.5,
 };
 
 export const COMBO = {
   baseWindow: 1.2,
-  windowPerLevel: 0.12,
+  windowPerLevel: 0.15,
   perStack: 0.02,
   baseCap: 2,
-  capPerLevel: 0.05,
+  capPerLevel: 0.15,
 };
 
 export const MAGNET = {
   /** pull range = R * (rangeBase + rangePerLevel * lvl) for lvl >= 1 */
-  rangeBase: 0.1,
-  rangePerLevel: 0.06,
-  /** pull speed = (pullBase + pullPerRadius * R) * (1 + 0.03 lvl) */
+  rangeBase: 0.15,
+  rangePerLevel: 0.12,
+  /** pull speed = (pullBase + pullPerRadius * R) * (1 + pullPerLevel * lvl) */
   pullBase: 2,
   pullPerRadius: 1.5,
+  pullPerLevel: 0.08,
 };
 
 // ---------------------------------------------------------------- upgrades
@@ -64,20 +102,24 @@ export interface UpgradeDef {
   needsHelper?: boolean;
 }
 
+/**
+ * Capped tracks with few, chunky levels (each one changes a round by ~10% or more). Costs grow
+ * geometrically (base * growth^level) and no track has milestone multipliers.
+ */
 export const UPGRADES: UpgradeDef[] = [
-  { id: 'startSize', name: 'Starting Size', icon: '⭕', desc: 'Begin each round bigger.', base: 15, growth: 2.05, max: 40, unlockAt: 0 },
-  { id: 'speed', name: 'Speed', icon: '💨', desc: 'Glide around the map faster.', base: 12, growth: 1.45, max: 40, unlockAt: 0 },
-  { id: 'cashValue', name: 'Cash Value', icon: '💰', desc: 'Everything you eat is worth more. x2 at Lv 25, 50, 75, 100...', base: 25, growth: 1.42, max: Infinity, unlockAt: 0 },
-  { id: 'roundTime', name: 'Round Time', icon: '⏱️', desc: 'More seconds per round.', base: 60, growth: 1.6, max: 24, unlockAt: 0 },
-  { id: 'growth', name: 'Growth Rate', icon: '📈', desc: 'Gain size XP faster.', base: 60, growth: 1.5, max: 50, unlockAt: 120 },
-  { id: 'magnet', name: 'Magnet', icon: '🧲', desc: 'Nearby edible props slide toward you.', base: 200, growth: 1.45, max: 30, unlockAt: 400 },
-  { id: 'combo', name: 'Combo Window', icon: '🔥', desc: 'Longer combo window and a higher combo cap.', base: 500, growth: 1.45, max: 30, unlockAt: 2000 },
-  { id: 'golden', name: 'Golden Touch', icon: '✨', desc: 'More props spawn golden. Golden props are worth x10.', base: 20000, growth: 2.1, max: 15, unlockAt: 15000 },
-  { id: 'offline', name: 'Offline Vault', icon: '🌙', desc: 'Helpers earn longer and better while you are away.', base: 3000, growth: 1.6, max: 16, unlockAt: 0, needsHelper: true },
+  { id: 'startSize', name: 'Starting Size', icon: '⭕', desc: 'Begin each round one size bigger.', base: 40, growth: 1.6, max: 45, unlockAt: 0 },
+  { id: 'speed', name: 'Speed', icon: '💨', desc: 'Glide around the map 8% faster.', base: 60, growth: 4.5, max: 8, unlockAt: 0 },
+  { id: 'cashValue', name: 'Cash Value', icon: '💰', desc: 'Everything you eat is worth 25% more.', base: 100, growth: 3.5, max: 10, unlockAt: 0 },
+  { id: 'roundTime', name: 'Round Time', icon: '⏱️', desc: '+10 seconds per round.', base: 400, growth: 8, max: 4, unlockAt: 0 },
+  { id: 'growth', name: 'Growth Rate', icon: '📈', desc: 'Gain size 10% faster.', base: 150, growth: 5, max: 6, unlockAt: 100 },
+  { id: 'magnet', name: 'Magnet', icon: '🧲', desc: 'Nearby edible props slide toward you.', base: 200, growth: 4.5, max: 8, unlockAt: 300 },
+  { id: 'combo', name: 'Combo Window', icon: '🔥', desc: 'Longer combo window and a higher combo cap.', base: 500, growth: 4, max: 8, unlockAt: 1500 },
+  { id: 'golden', name: 'Golden Touch', icon: '✨', desc: 'More props spawn golden. Golden props are worth x10.', base: 5000, growth: 4, max: 8, unlockAt: 15000 },
+  { id: 'offline', name: 'Offline Vault', icon: '🌙', desc: 'Earn for 1 more hour while you are away.', base: 3000, growth: 10, max: 4, unlockAt: 5000 },
 ];
 
 /** Golden props: chance per prop each round (base + per Golden Touch level) and value multiplier. */
-export const GOLDEN = { baseChance: 0.01, chancePerLevel: 0.006, valueMul: 10 };
+export const GOLDEN = { baseChance: 0.01, chancePerLevel: 0.01, valueMul: 10 };
 
 /**
  * In-round random events (not in the hub demo or the warm-up). At round start each event the map
@@ -95,31 +137,34 @@ export const EVENTS = {
   stampede: { count: 18, duration: 18, speed: [5, 6.5] as [number, number] },
 };
 
-export const CASH_VALUE = { perLevel: 0.15, milestones: [25, 50, 75, 100, 150, 200, 300, 400, 500] };
-export const SPEED_PER_LEVEL = 0.04;
+export const CASH_VALUE = { perLevel: 0.25 };
+export const SPEED_PER_LEVEL = 0.08;
 export const GROWTH_PER_LEVEL = 0.1;
 
+/**
+ * Coming back pays `roundsPerHour` x the average cash of your last `recentRounds` rounds per hour
+ * away, up to the cap. A full 8 h base cap is worth 4 rounds: a welcome-back bonus, never better
+ * than playing.
+ */
 export const OFFLINE = {
-  baseCapHours: 4,
+  baseCapHours: 8,
   capPerLevel: 1,
-  baseEfficiency: 0.5,
-  efficiencyPerLevel: 0.05,
-  minSeconds: 60,
+  roundsPerHour: 0.5,
+  minSeconds: 180,
+  recentRounds: 5,
 };
 
 // ---------------------------------------------------------------- helper holes
 export const HELPERS = {
-  unlockAt: 500,
-  countCosts: [800, 9e3, 9e4, 9e5, 9e6, 9e7],
-  levelBase: 1200,
-  levelGrowth: 1.32,
-  levelMax: 40,
+  unlockAt: 800,
+  countCosts: [2000, 5e4, 1e6, 2.5e7],
+  levelBase: 5000,
+  levelGrowth: 3.5,
+  levelMax: 10,
   baseRadius: 0.7,
-  radiusGrowth: 1.05,
+  radiusGrowth: 1.13,
   maxRadius: 2.4,
   roundCashShare: 0.6,
-  incomeBase: 0.4,
-  incomeGrowth: 1.12,
   speed: 5,
 };
 
@@ -142,16 +187,16 @@ export interface AbilityDef {
 }
 
 export const ABILITIES: AbilityDef[] = [
-  { id: 'dash', name: 'Dash', icon: '⚡', key: 'Space / 1', desc: 'Burst of speed.', unlockCost: 1500, unlockAt: 800, duration: 0.6, cooldown: 7, startCharge: 1, maxLevel: 15 },
-  { id: 'vortex', name: 'Vortex', icon: '🌀', key: '2', desc: 'Powerful pull on everything edible nearby.', unlockCost: 15000, unlockAt: 8000, duration: 4, cooldown: 22, startCharge: 0.5, maxLevel: 15 },
-  { id: 'mega', name: 'Mega Mouth', icon: '👄', key: '3', desc: 'Temporarily grow 45% wider.', unlockCost: 120000, unlockAt: 60000, duration: 5, cooldown: 30, startCharge: 0.5, maxLevel: 15 },
+  { id: 'dash', name: 'Dash', icon: '⚡', key: 'Space / 1', desc: 'Burst of speed.', unlockCost: 5000, unlockAt: 2500, duration: 0.6, cooldown: 7, startCharge: 1, maxLevel: 5 },
+  { id: 'vortex', name: 'Vortex', icon: '🌀', key: '2', desc: 'Powerful pull on everything edible nearby.', unlockCost: 1e5, unlockAt: 5e4, duration: 4, cooldown: 22, startCharge: 0.5, maxLevel: 5 },
+  { id: 'mega', name: 'Mega Mouth', icon: '👄', key: '3', desc: 'Temporarily grow 45% wider.', unlockCost: 3e6, unlockAt: 1.5e6, duration: 5, cooldown: 30, startCharge: 0.5, maxLevel: 5 },
 ];
 
 export const ABILITY_LEVEL = {
-  costMul: 0.6,
-  costGrowth: 1.6,
-  cooldownPerLevel: 0.06,
-  durationPerLevel: 0.08,
+  costMul: 1,
+  costGrowth: 4,
+  cooldownPerLevel: 0.12,
+  durationPerLevel: 0.2,
   dashSpeed: 2.8,
   vortexRange: 3,
   vortexPull: 3,
@@ -166,44 +211,51 @@ export interface MapDef {
   name: string;
   icon: string;
   blurb: string;
-  cost: number;
+  /** Size level (0-based; shown as goal + 1) to reach on this map to unlock the next one. */
+  goal: number;
+  /** Singularities needed (ever) before this map can unlock. */
+  needsSingularities: number;
   valueMul: number;
-  /** Size levels the hole loses on this map: later maps feel bigger and must be grown into. */
+  /** Size levels the hole loses on this map: later maps are a bigger scale to grow into. */
   sizeOffset: number;
+  /** Size XP multiplier on this map: denser maps grow you slower so each takes several rounds. */
+  xpMul: number;
   seed: number;
 }
 
 export const MAPS: MapDef[] = [
-  { id: 'suburb', name: 'Sunny Suburb', icon: '🏡', blurb: 'Leafy streets, parks and cosy houses.', cost: 0, valueMul: 1, sizeOffset: 0, seed: 1101 },
-  { id: 'farm', name: 'Happy Farm', icon: '🚜', blurb: 'Barns, fields and lots of animals.', cost: 6000, valueMul: 5, sizeOffset: 2, seed: 3303 },
-  { id: 'downtown', name: 'Downtown', icon: '🏙️', blurb: 'Busy avenues and towering skyscrapers.', cost: 300000, valueMul: 30, sizeOffset: 3, seed: 2202 },
-  { id: 'harbor', name: 'Harbor', icon: '⚓', blurb: 'Containers, cranes and giant ships.', cost: 5e6, valueMul: 110, sizeOffset: 6, seed: 4404 },
-  { id: 'airport', name: 'Airport', icon: '✈️', blurb: 'Jets, hangars and a huge terminal.', cost: 1.5e8, valueMul: 600, sizeOffset: 8, seed: 5505 },
-  { id: 'moon', name: 'Moon Base', icon: '🌙', blurb: 'Low gravity, big domes, suspicious cheese.', cost: 3e9, valueMul: 1700, sizeOffset: 11, seed: 6606 },
+  { id: 'suburb', name: 'Sunny Suburb', icon: '🏡', blurb: 'Leafy streets, parks and cosy houses.', goal: 16, needsSingularities: 0, valueMul: 1, sizeOffset: 0, xpMul: 1, seed: 1101 },
+  { id: 'farm', name: 'Happy Farm', icon: '🚜', blurb: 'Barns, fields and lots of animals.', goal: 19, needsSingularities: 0, valueMul: 6, sizeOffset: 8, xpMul: 0.81, seed: 3303 },
+  { id: 'downtown', name: 'Downtown', icon: '🏙️', blurb: 'Busy avenues and towering skyscrapers.', goal: 25, needsSingularities: 0, valueMul: 45, sizeOffset: 16, xpMul: 0.62, seed: 2202 },
+  { id: 'harbor', name: 'Harbor', icon: '⚓', blurb: 'Containers, cranes and giant ships.', goal: 24, needsSingularities: 0, valueMul: 236, sizeOffset: 22, xpMul: 0.47, seed: 4404 },
+  { id: 'airport', name: 'Airport', icon: '✈️', blurb: 'Jets, hangars and a huge terminal.', goal: 27, needsSingularities: 1, valueMul: 825, sizeOffset: 31, xpMul: 1, seed: 5505 },
+  { id: 'moon', name: 'Moon Base', icon: '🌙', blurb: 'Low gravity, big domes, suspicious cheese.', goal: 25, needsSingularities: 3, valueMul: 372, sizeOffset: 35, xpMul: 0.81, seed: 6606 },
 ];
 
 export const MAP_COMPLETE_BONUS = 0.25;
 
-/**
- * Later maps are "bigger worlds": the hole starts `sizeOffset` levels smaller and size XP is
- * scaled by radiusGrowth^(-xpExp * xpPerOffset * sizeOffset), so it cannot simply re-grow to
- * full size inside one round.
- */
-export const MAP_SCALE = { xpPerOffset: 0.75 };
-
 // ---------------------------------------------------------------- prestige
+/**
+ * Singularity. Dark Matter is based on lifetime cash: you have earned
+ * floor(coef * (lifetimeCash / divisor)^exponent) DM in total, and each Singularity pays what you
+ * have not claimed yet, so resetting at the same point again pays less and less. It becomes
+ * available once `unlockMap` is unlocked. After the first run that reaches the Moon Base goal,
+ * every such run raises the tier: maps start `tier` sizes smaller, pay and cost tierScale^tier
+ * times more, and Dark Matter gains are x(1 + tierDmBonus * tier).
+ */
 export const PRESTIGE = {
-  minRunCash: 1e7,
-  coef: 5,
-  divisor: 1e7,
-  exponent: 0.5,
+  coef: 2.5,
+  divisor: 1e6,
+  exponent: 0.25,
   bonusPerDm: 0.1,
+  unlockMap: 'downtown' as MapId,
+  tierScale: 4,
+  tierDmBonus: 0.5,
 };
 
 export type DmUpgradeId =
   | 'eventHorizon'
   | 'denseCore'
-  | 'timeDilation'
   | 'quantumHelpers'
   | 'hawking'
   | 'headStart'
@@ -221,17 +273,18 @@ export interface DmUpgradeDef {
 }
 
 export const DM_UPGRADES: DmUpgradeDef[] = [
-  { id: 'eventHorizon', name: 'Event Horizon', icon: '🕳️', desc: '+25% cash per level.', base: 1, growth: 1.5, max: 50 },
-  { id: 'denseCore', name: 'Dense Core', icon: '🟣', desc: '+1 starting size per level.', base: 2, growth: 1.8, max: 15 },
-  { id: 'timeDilation', name: 'Time Dilation', icon: '⌛', desc: '+6 s round time per level.', base: 2, growth: 1.7, max: 15 },
-  { id: 'headStart', name: 'Head Start', icon: '🎁', desc: 'Start each run with cash (x10 per level).', base: 1, growth: 2, max: 10 },
-  { id: 'quantumHelpers', name: 'Quantum Helpers', icon: '👯', desc: 'Helper income x1.5 per level.', base: 3, growth: 1.9, max: 20 },
-  { id: 'gravityWell', name: 'Gravity Well', icon: '🌌', desc: '+2 magnet levels for free, per level.', base: 3, growth: 1.8, max: 10 },
-  { id: 'hawking', name: 'Hawking Radiation', icon: '☢️', desc: '+2 h offline cap and +10% offline efficiency.', base: 4, growth: 2, max: 8 },
-  { id: 'wormhole', name: 'Wormhole', icon: '🌀', desc: 'Keep unlocked maps through Singularity.', base: 25, growth: 1, max: 1 },
+  { id: 'eventHorizon', name: 'Event Horizon', icon: '🕳️', desc: '+25% cash per level.', base: 2, growth: 1.5, max: 20 },
+  { id: 'denseCore', name: 'Dense Core', icon: '🟣', desc: '+1 starting size per level.', base: 3, growth: 1.7, max: 10 },
+  { id: 'headStart', name: 'Head Start', icon: '🎁', desc: 'Start each run with cash (x10 per level).', base: 2, growth: 2, max: 6 },
+  { id: 'quantumHelpers', name: 'Quantum Helpers', icon: '👯', desc: 'Helper holes are 10% bigger and faster per level.', base: 3, growth: 1.8, max: 10 },
+  { id: 'gravityWell', name: 'Gravity Well', icon: '🌌', desc: '+1 magnet level for free, per level.', base: 3, growth: 1.8, max: 6 },
+  { id: 'hawking', name: 'Hawking Radiation', icon: '☢️', desc: '+2 h offline cap per level.', base: 5, growth: 2, max: 3 },
+  { id: 'wormhole', name: 'Wormhole', icon: '🌀', desc: 'Keep unlocked maps through Singularity.', base: 40, growth: 1, max: 1 },
 ];
 
-export const HEAD_START_BASE = 500;
+export const HEAD_START_BASE = 300;
+/** Quantum Helpers: helper radius and speed bonus per level. */
+export const QUANTUM_PER_LEVEL = 0.1;
 
 // ---------------------------------------------------------------- skins
 export interface SkinDef {
@@ -255,6 +308,10 @@ export const SKINS: SkinDef[] = [
   { id: 'toxic', name: 'Toxic', rim: '#9dff2f', glow: '#d6ff8a', swirl: 'spiral', swirlColor: '#3b7a0c', cost: 10 },
   { id: 'galaxy', name: 'Galaxy', rim: '#d38cff', glow: '#ffffff', swirl: 'galaxy', swirlColor: '#2a1a6e', cost: 30 },
   { id: 'void', name: 'True Void', rim: '#222233', glow: '#8888aa', swirl: 'none', swirlColor: '#000000', cost: 0, achievement: 'prestige3' },
+  { id: 'nebula', name: 'Nebula', rim: '#5ad1ff', glow: '#c7a4ff', swirl: 'galaxy', swirlColor: '#3a1f7a', cost: 0, achievement: 'tier1' },
+  { id: 'aurora', name: 'Aurora', rim: '#4dffb8', glow: '#a3f7ff', swirl: 'rings', swirlColor: '#0f5c63', cost: 0, achievement: 'tier3' },
+  { id: 'supernova', name: 'Supernova', rim: '#ffef5a', glow: '#ff9a3d', swirl: 'stars', swirlColor: '#a3200f', cost: 0, achievement: 'tier5' },
+  { id: 'quasar', name: 'Quasar', rim: '#ffffff', glow: '#7ae3ff', swirl: 'galaxy', swirlColor: '#06123a', cost: 0, achievement: 'tier10' },
 ];
 
 // ---------------------------------------------------------------- bonuses
@@ -265,4 +322,4 @@ export const AUTOSAVE_SECONDS = 20;
 export const SAVE_KEY = 'snack-hole-save';
 /** Key used while the game was called Hungry Hole; read only when SAVE_KEY is empty. */
 export const LEGACY_SAVE_KEY = 'hungry-hole-save';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;

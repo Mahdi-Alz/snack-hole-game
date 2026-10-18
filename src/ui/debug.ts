@@ -108,7 +108,7 @@ export function debugApiFor(game: Game): DebugApi {
       return [
         `state ${state}  warp x${game.warp}`,
         `cash ${formatCash(s.cash)}  run ${formatCash(s.runCash)}`,
-        `passive ${formatCash(eco.passiveIncome(s))}/s  mult x${eco.globalCashMult(s).toFixed(2)}`,
+        `offline ${formatCash(eco.offlineRate(s))}/h  mult x${eco.globalCashMult(s).toFixed(2)}  tier ${s.tier}  DM gain ${eco.dmGain(s)}`,
         `rounds ${s.stats.rounds}  play ${(s.stats.playSeconds / 60).toFixed(1)} min`,
         `frame JS ${frameMs.toFixed(2)} ms (sim ${simMs.toFixed(2)} ms, sync ${syncMs.toFixed(2)} ms)`,
         world ? `objs ${world.objects.length}  movers ${world.movers.length}  R ${world.main.r.toFixed(2)}` : '',

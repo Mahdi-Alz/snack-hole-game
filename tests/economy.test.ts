@@ -1,25 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { CASH_VALUE, COMBO, HELPERS, MAPS, OFFLINE, PRESTIGE, ROUND, UPGRADES } from '../src/config/balance';
+import { CASH_VALUE, COMBO, HEAD_START_BASE, MAPS, OFFLINE, PRESTIGE, ROUND, ROUND_END, UPGRADES } from '../src/config/balance';
 import {
   applyPrestige,
-  buyMap,
   buildRoundConfig,
   buyUpgrade,
-  bulkCount,
   canEat,
   cashValueMult,
   comboMult,
   computeOffline,
-  dmForRunCash,
+  dmForLifetime,
+  dmGain,
   earn,
   geomBulkCost,
   geomCost,
   geomMaxAffordable,
   levelToEat,
-  passiveIncome,
+  lifetimeForDm,
+  mapLockReason,
+  noteRound,
   radiusForLevel,
   roundTimeFor,
-  runCashForDm,
+  timeBonusFrac,
+  unlockMaps,
+  upgradeCost,
 } from '../src/core/economy';
 import { defaultSave } from '../src/core/save';
 
@@ -46,47 +49,65 @@ describe('cost curves', () => {
 });
 
 describe('upgrades', () => {
-  it('buys single and bulk levels, deducting cash', () => {
+  it('buys one level, deducting its price', () => {
     const s = defaultSave(0);
-    s.cash = 100;
-    const base = UPGRADES.find((u) => u.id === 'speed')!.base;
+    const price = upgradeCost('speed', 0);
+    s.cash = price + 1;
     expect(buyUpgrade(s, 'speed', 1)).toBe(1);
     expect(s.upgrades.speed).toBe(1);
-    expect(s.cash).toBeCloseTo(100 - base);
-    const n = bulkCount(s, 'speed', 'max');
-    const got = buyUpgrade(s, 'speed', n);
-    expect(got).toBe(n);
-    expect(s.cash).toBeGreaterThanOrEqual(0);
+    expect(s.cash).toBeCloseTo(1);
   });
 
   it('refuses purchases it cannot afford', () => {
     const s = defaultSave(0);
-    s.cash = 5;
+    s.cash = upgradeCost('startSize', 0) - 1;
     expect(buyUpgrade(s, 'startSize', 1)).toBe(0);
-    expect(s.cash).toBe(5);
+    expect(s.upgrades.startSize).toBe(0);
   });
 
   it('respects max levels', () => {
     const s = defaultSave(0);
-    const def = UPGRADES.find((u) => u.id === 'roundTime')!;
-    s.upgrades.roundTime = def.max;
+    s.upgrades.roundTime = UPGRADES.find((u) => u.id === 'roundTime')!.max;
     s.cash = 1e30;
     expect(buyUpgrade(s, 'roundTime', 1)).toBe(0);
   });
 
-  it('cash value doubles at milestones', () => {
-    const [m1, m2] = CASH_VALUE.milestones;
-    const lin = (l: number) => 1 + CASH_VALUE.perLevel * l;
-    expect(cashValueMult(m1 - 1)).toBeCloseTo(lin(m1 - 1));
-    expect(cashValueMult(m1)).toBeCloseTo(lin(m1) * 2);
-    expect(cashValueMult(m2)).toBeCloseTo(lin(m2) * 4);
+  it('every track is capped', () => {
+    for (const u of UPGRADES) expect(Number.isFinite(u.max)).toBe(true);
   });
 
+  it('a Singularity tier makes prices higher', () => {
+    const s = defaultSave(0);
+    s.tier = 2;
+    s.cash = upgradeCost('speed', 0) * 2;
+    expect(buyUpgrade(s, 'speed', 1)).toBe(0);
+    expect(upgradeCost('speed', 0, 2)).toBeCloseTo(upgradeCost('speed', 0) * PRESTIGE.tierScale ** 2);
+  });
+
+  it('cash value grows linearly with no milestone jumps', () => {
+    for (let l = 0; l < 10; l++) expect(cashValueMult(l + 1) - cashValueMult(l)).toBeCloseTo(CASH_VALUE.perLevel);
+  });
+});
+
+describe('rounds', () => {
   it('first round is a short warm-up', () => {
     const s = defaultSave(0);
-    expect(roundTimeFor(s)).toBe(20);
+    expect(roundTimeFor(s)).toBe(ROUND.warmupTime);
     s.stats.rounds = 1;
     expect(roundTimeFor(s)).toBe(ROUND.baseTime);
+  });
+
+  it('Round Time tops out at 100 seconds', () => {
+    const s = defaultSave(0);
+    s.stats.rounds = 1;
+    s.upgrades.roundTime = UPGRADES.find((u) => u.id === 'roundTime')!.max;
+    expect(roundTimeFor(s)).toBe(100);
+  });
+
+  it('time bonus grows with seconds left and is capped', () => {
+    expect(timeBonusFrac(0)).toBe(0);
+    expect(timeBonusFrac(10)).toBeCloseTo(10 * ROUND_END.bonusPerSecond);
+    expect(timeBonusFrac(1000)).toBe(ROUND_END.bonusCap);
   });
 });
 
@@ -107,96 +128,149 @@ describe('size rules', () => {
 });
 
 describe('maps', () => {
-  it('must be unlocked in order', () => {
+  it('unlock in order once the previous size goal is reached', () => {
     const s = defaultSave(0);
-    s.cash = 1e12;
-    expect(buyMap(s, MAPS[2].id)).toBe(false);
-    expect(buyMap(s, MAPS[1].id)).toBe(true);
-    expect(buyMap(s, MAPS[2].id)).toBe(true);
+    expect(unlockMaps(s)).toEqual([]);
+    expect(mapLockReason(s, MAPS[1].id)).toContain(`size ${MAPS[0].goal + 1}`);
+    noteRound(s, MAPS[0].id, MAPS[0].goal, 10);
+    expect(unlockMaps(s)).toEqual([MAPS[1].id]);
+    expect(s.maps[MAPS[2].id]).toBe(false);
   });
 
-  it('later maps start the hole smaller and grow it slower', () => {
+  it('later maps need Singularities', () => {
+    const s = defaultSave(0);
+    const gated = MAPS.findIndex((m) => m.needsSingularities > 0);
+    for (let i = 0; i < gated; i++) {
+      s.maps[MAPS[i].id] = true;
+      s.mapLevel[MAPS[i].id] = MAPS[i].goal;
+    }
+    expect(unlockMaps(s)).toEqual([]);
+    expect(mapLockReason(s, MAPS[gated].id)).toContain('Singularit');
+    s.stats.prestiges = MAPS[gated].needsSingularities;
+    expect(unlockMaps(s)).toEqual([MAPS[gated].id]);
+  });
+
+  it('start smaller on bigger worlds and on higher tiers', () => {
     const s = defaultSave(0);
     s.stats.rounds = 1;
-    s.upgrades.startSize = 20;
-    const first = buildRoundConfig(s, MAPS[0].id);
-    const last = buildRoundConfig(s, MAPS[MAPS.length - 1].id);
-    expect(first.startLevel).toBe(20);
-    expect(last.startLevel).toBe(20 - MAPS[MAPS.length - 1].sizeOffset);
-    expect(last.xpMult).toBeLessThan(first.xpMult);
+    s.upgrades.startSize = 40;
+    const last = MAPS[MAPS.length - 1];
+    expect(buildRoundConfig(s, MAPS[0].id).startLevel).toBe(40);
+    expect(buildRoundConfig(s, last.id).startLevel).toBe(40 - last.sizeOffset);
+    s.tier = 2;
+    expect(buildRoundConfig(s, last.id).startLevel).toBe(40 - last.sizeOffset - 2);
     s.upgrades.startSize = 0;
-    expect(buildRoundConfig(s, MAPS[MAPS.length - 1].id).startLevel).toBe(0);
+    expect(buildRoundConfig(s, last.id).startLevel).toBe(0);
   });
 });
 
 describe('offline progress', () => {
-  it('earns nothing without helpers or for short absences', () => {
+  const recent = (s: ReturnType<typeof defaultSave>, cash: number) => {
+    for (let i = 0; i < OFFLINE.recentRounds; i++) noteRound(s, 'suburb', 0, cash);
+  };
+
+  it('pays nothing for short absences or before any round', () => {
     const s = defaultSave(0);
     expect(computeOffline(s, 10 * 3600e3).earned).toBe(0);
-    s.helpers = 1;
-    expect(computeOffline(s, 30e3).earned).toBe(0);
+    recent(s, 1000);
+    expect(computeOffline(s, (OFFLINE.minSeconds - 1) * 1000).earned).toBe(0);
   });
 
-  it('caps the credited time and applies efficiency', () => {
+  it('pays a few rounds of recent income for a night away, without helpers', () => {
     const s = defaultSave(0);
-    s.helpers = 2;
-    const rate = passiveIncome(s);
-    const r = computeOffline(s, 48 * 3600e3);
-    expect(r.creditedSeconds).toBe(OFFLINE.baseCapHours * 3600);
-    expect(r.earned).toBeCloseTo(rate * OFFLINE.baseCapHours * 3600 * OFFLINE.baseEfficiency, 3);
+    recent(s, 1000);
+    const night = computeOffline(s, 8 * 3600e3);
+    expect(night.earned / 1000).toBeGreaterThanOrEqual(3);
+    expect(night.earned / 1000).toBeLessThanOrEqual(5);
+  });
+
+  it('caps the credited time; Offline Vault raises the cap', () => {
+    const s = defaultSave(0);
+    recent(s, 1000);
+    expect(computeOffline(s, 48 * 3600e3).creditedSeconds).toBe(OFFLINE.baseCapHours * 3600);
     s.upgrades.offline = 2;
-    expect(computeOffline(s, 48 * 3600e3).creditedSeconds).toBe((OFFLINE.baseCapHours + 2) * 3600);
+    expect(computeOffline(s, 48 * 3600e3).creditedSeconds).toBe((OFFLINE.baseCapHours + 2 * OFFLINE.capPerLevel) * 3600);
   });
 
-  it('passive income scales with helper count and level', () => {
+  it('only remembers the last few rounds', () => {
     const s = defaultSave(0);
-    s.helpers = 1;
-    const one = passiveIncome(s);
-    expect(one).toBeCloseTo(HELPERS.incomeBase);
-    s.helpers = 3;
-    s.helperLevel = 2;
-    expect(passiveIncome(s)).toBeCloseTo(3 * HELPERS.incomeBase * HELPERS.incomeGrowth ** 2);
+    for (let i = 0; i < 20; i++) noteRound(s, 'suburb', 0, i);
+    expect(s.recentRoundCash.length).toBe(OFFLINE.recentRounds);
+    expect(s.recentRoundCash[s.recentRoundCash.length - 1]).toBe(19);
   });
 });
 
 describe('prestige', () => {
-  it('needs a minimum run and follows the sqrt curve', () => {
-    const d = PRESTIGE.divisor;
-    expect(dmForRunCash(PRESTIGE.minRunCash - 1)).toBe(0);
-    expect(dmForRunCash(d)).toBe(PRESTIGE.coef);
-    expect(dmForRunCash(4 * d)).toBe(2 * PRESTIGE.coef);
-    expect(dmForRunCash(runCashForDm(12))).toBeGreaterThanOrEqual(12);
+  const unlocked = () => {
+    const s = defaultSave(0);
+    s.maps[PRESTIGE.unlockMap] = true;
+    return s;
+  };
+
+  it('is locked until the prestige map is unlocked', () => {
+    const s = defaultSave(0);
+    earn(s, lifetimeForDm(50));
+    expect(dmGain(s)).toBe(0);
+    s.maps[PRESTIGE.unlockMap] = true;
+    expect(dmGain(s)).toBe(50);
+  });
+
+  it('pays from lifetime cash, so collapsing again at the same point pays nothing', () => {
+    const s = unlocked();
+    earn(s, lifetimeForDm(20));
+    const n = applyPrestige(s);
+    expect(n.dmTotal).toBe(20);
+    n.maps[PRESTIGE.unlockMap] = true;
+    expect(dmGain(n)).toBe(0);
+    earn(n, lifetimeForDm(30) - n.lifetimeCash);
+    expect(dmGain(n)).toBe(10);
+  });
+
+  it('needs ~16x the lifetime cash to double Dark Matter', () => {
+    expect(lifetimeForDm(20) / lifetimeForDm(10)).toBeCloseTo(16);
+    expect(dmForLifetime(lifetimeForDm(12) * 1.0001)).toBe(12);
   });
 
   it('resets the run but keeps meta progress', () => {
-    const s = defaultSave(0);
-    earn(s, 4 * PRESTIGE.divisor);
-    s.upgrades.speed = 10;
-    s.maps.downtown = true;
+    const s = unlocked();
+    earn(s, lifetimeForDm(10));
+    s.upgrades.speed = 5;
     s.gulpedia.car = 3;
     s.achievements.push('firstBite');
     s.map100.suburb = true;
+    s.mapLevel.suburb = 12;
+    s.recentRoundCash.push(5);
     const n = applyPrestige(s);
-    expect(n.dm).toBe(2 * PRESTIGE.coef);
-    expect(n.dmTotal).toBe(2 * PRESTIGE.coef);
+    expect(n.dm).toBe(10);
     expect(n.cash).toBe(0);
     expect(n.upgrades.speed).toBe(0);
-    expect(n.maps.downtown).toBe(false);
+    expect(n.maps[PRESTIGE.unlockMap]).toBe(false);
+    expect(n.mapLevel.suburb).toBe(0);
+    expect(n.recentRoundCash).toEqual([]);
     expect(n.gulpedia.car).toBe(3);
     expect(n.achievements).toContain('firstBite');
     expect(n.map100.suburb).toBe(true);
-    expect(n.lifetimeCash).toBe(4 * PRESTIGE.divisor);
     expect(n.stats.prestiges).toBe(1);
   });
 
+  it('a run that reached the Moon Base goal raises the tier, which boosts Dark Matter', () => {
+    const s = unlocked();
+    const moon = MAPS[MAPS.length - 1];
+    s.mapLevel[moon.id] = moon.goal;
+    const n = applyPrestige(s);
+    expect(n.tier).toBe(1);
+    n.maps[PRESTIGE.unlockMap] = true;
+    earn(n, lifetimeForDm(10));
+    expect(dmGain(n)).toBe(Math.floor(10 * (1 + PRESTIGE.tierDmBonus)));
+    expect(applyPrestige(n).tier).toBe(1);
+  });
+
   it('wormhole keeps maps and head start grants cash', () => {
-    const s = defaultSave(0);
-    earn(s, 1e6);
-    s.maps.downtown = true;
+    const s = unlocked();
     s.dmUpgrades.wormhole = 1;
     s.dmUpgrades.headStart = 2;
     const n = applyPrestige(s);
-    expect(n.maps.downtown).toBe(true);
-    expect(n.cash).toBe(5000);
+    expect(n.maps[PRESTIGE.unlockMap]).toBe(true);
+    expect(n.cash).toBe(HEAD_START_BASE * 10);
   });
 });

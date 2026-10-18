@@ -73,7 +73,7 @@ async function run(viewport, prefix) {
   await page.evaluate(() => {
     const s = window.game.debugState.save;
     s.upgrades.startSize = 14;
-    s.upgrades.speed = 12;
+    s.upgrades.speed = 6;
     s.abilities.dash = 1;
     s.abilities.vortex = 1;
     s.helpers = 3;
@@ -105,7 +105,7 @@ async function run(viewport, prefix) {
   console.log(prefix, 'avg JS frame ms', ms.toFixed(2), 'sim+sync ms', sim.toFixed(2), 'objects', await page.evaluate(() => window.game.debugState.world.objects.length));
 
   if (prefix === 'desktop') {
-    // Offline progress: pretend we left 2 hours ago with helpers.
+    // Offline progress: pretend we left 2 hours ago (pays from the rounds just played).
     await page.evaluate(() => {
       window.game.debugState.world.timeLeft = 0.01;
     });
@@ -115,7 +115,6 @@ async function run(viewport, prefix) {
       const g = window.game;
       g.persist();
       const raw = JSON.parse(localStorage.getItem('snack-hole-save'));
-      raw.helpers = 2;
       raw.lastSeen = Date.now() - 2 * 3600 * 1000;
       localStorage.setItem('snack-hole-save', JSON.stringify(raw));
       // Keep the doctored save: stop the unload autosave from overwriting it.
@@ -134,7 +133,8 @@ async function run(viewport, prefix) {
     // Prestige flow.
     await page.evaluate(() => {
       const s = window.game.debugState.save;
-      s.runCash = 4e7;
+      s.maps.downtown = true;
+      s.lifetimeCash = 6e8;
       window.game.hub.selectTab('singularity');
     });
     await page.waitForTimeout(500);

@@ -5,6 +5,7 @@ import { generateAirport } from './airport';
 import { generateDowntown } from './downtown';
 import { generateFarm } from './farm';
 import { generateHarbor } from './harbor';
+import { fillLadder } from './ladder';
 import { generateMoon } from './moon';
 import { generateSuburb } from './suburb';
 
@@ -27,6 +28,7 @@ export function generateMap(id: MapId): MapData {
     const gen = GENERATORS[id] ?? generateSuburb;
     m = gen(def.seed);
     m.id = id;
+    fillLadder(m);
     cache.set(id, m);
   }
   return m;

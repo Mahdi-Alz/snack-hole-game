@@ -43,7 +43,12 @@ export interface SaveData {
   runCash: number;
   lifetimeCash: number;
   dm: number;
+  /** All Dark Matter ever gained (sets the permanent cash bonus). */
   dmTotal: number;
+  /** Dark Matter already claimed from the lifetime-cash formula (before tier bonuses). */
+  dmClaimed: number;
+  /** Singularity tier: +1 for every run that reached the Moon Base goal. */
+  tier: number;
   upgrades: Record<UpgradeId, number>;
   helpers: number;
   helperLevel: number;
@@ -52,6 +57,10 @@ export interface SaveData {
   selectedMap: MapId;
   mapBest: Record<MapId, number>;
   map100: Record<MapId, boolean>;
+  /** Biggest size level reached on each map this run (unlocks the next map at its goal). */
+  mapLevel: Record<MapId, number>;
+  /** Cash from the last few rounds, newest last (sets the offline payout). */
+  recentRoundCash: number[];
   dmUpgrades: Record<DmUpgradeId, number>;
   skins: string[];
   skin: string;
@@ -79,6 +88,8 @@ export function defaultSave(now = Date.now()): SaveData {
     lifetimeCash: 0,
     dm: 0,
     dmTotal: 0,
+    dmClaimed: 0,
+    tier: 0,
     upgrades: record(UPGRADES.map((u) => u.id), 0),
     helpers: 0,
     helperLevel: 0,
@@ -87,6 +98,8 @@ export function defaultSave(now = Date.now()): SaveData {
     selectedMap: 'suburb',
     mapBest: record(MAPS.map((m) => m.id), 0),
     map100: record(MAPS.map((m) => m.id), false),
+    mapLevel: record(MAPS.map((m) => m.id), 0),
+    recentRoundCash: [],
     dmUpgrades: record(DM_UPGRADES.map((u) => u.id), 0),
     skins: ['classic'],
     skin: 'classic',
@@ -148,6 +161,10 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => void> = {
     const done = isObj(d.map100) ? d.map100 : {};
     for (const k of Object.keys(d.mapBest)) d.mapBest[k] = done[k] === true ? 1 : 0;
   },
+  // 2 -> 3: the economy was rebalanced from scratch; old progress does not fit it. Keep settings.
+  2: (d) => {
+    for (const k of Object.keys(d)) if (k !== 'settings') delete d[k];
+  },
 };
 
 export function migrate(raw: unknown, now = Date.now()): SaveData {
@@ -174,7 +191,7 @@ export function migrate(raw: unknown, now = Date.now()): SaveData {
   merged.maps.suburb = true;
   if (!merged.maps[merged.selectedMap]) merged.selectedMap = 'suburb';
   if (!merged.skins.includes(merged.skin)) merged.skin = 'classic';
-  for (const key of ['cash', 'runCash', 'lifetimeCash', 'dm', 'dmTotal'] as const) {
+  for (const key of ['cash', 'runCash', 'lifetimeCash', 'dm', 'dmTotal', 'dmClaimed', 'tier'] as const) {
     if (!Number.isFinite(merged[key]) || merged[key] < 0) merged[key] = 0;
   }
   return merged;

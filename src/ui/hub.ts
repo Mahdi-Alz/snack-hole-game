@@ -1,6 +1,7 @@
 import { MAPS } from '../config/balance';
-import { mapDef, passiveIncome, roundTimeFor, startLevel } from '../core/economy';
-import { formatCash, formatNumber, formatPercent, formatRate } from '../core/format';
+import { mapDef, roundTimeFor, startLevel } from '../core/economy';
+import { formatCash, formatNumber, formatPercent } from '../core/format';
+import type { SaveData } from '../core/save';
 import type { Card } from './cards';
 import { h, setText, toggleClass } from './dom';
 import { TABS, renderTab, type HubApi, type TabId } from './tabs';
@@ -128,8 +129,7 @@ export class Hub {
     this.acc = 0;
     this.lastCash = s.cash;
     setText(this.cash, formatCash(s.cash));
-    const rate = passiveIncome(s);
-    setText(this.rate, rate > 0 ? `+$${formatRate(rate)}/s` : '');
+    setText(this.rate, '');
     setText(this.dm, s.dmTotal > 0 || s.dm > 0 ? `🌑 ${formatNumber(s.dm)} DM` : '');
     toggleClass(this.dm, 'hidden', !(s.dmTotal > 0 || s.dm > 0));
     const m = mapDef(s.selectedMap);
@@ -139,19 +139,23 @@ export class Hub {
       this.playInfo,
       first
         ? 'Warm-up round · 20s · steer with mouse, touch or WASD'
-        : `${roundTimeFor(s)}s · start size ${startLevel(s) + 1} · best ${formatPercent(s.mapBest[s.selectedMap])}${s.map100[s.selectedMap] ? ' ✅' : ''}`,
+        : `${roundTimeFor(s)}s · start size ${startLevel(s) + 1} · ${goalText(s)}`,
     );
     for (const c of this.cards) c.update();
     // Highlight tabs with something affordable.
     for (const [id, b] of this.tabButtons) toggleClass(b, 'has-buy', id !== this.tab && this.tabHasAffordable(id));
   }
 
-  private tabHasAffordable(id: TabId): boolean {
-    const s = this.api.save;
-    if (id === 'maps') {
-      const i = MAPS.findIndex((m) => !s.maps[m.id]);
-      return i > 0 && s.maps[MAPS[i - 1].id] && s.cash >= MAPS[i].cost;
-    }
+  private tabHasAffordable(_id: TabId): boolean {
     return false;
   }
+}
+
+/** Size goal for the selected map, or the best % once the next map is unlocked. */
+function goalText(s: SaveData): string {
+  const i = MAPS.findIndex((m) => m.id === s.selectedMap);
+  const m = MAPS[i];
+  const next = MAPS[i + 1];
+  if (next && !s.maps[next.id]) return `goal size ${m.goal + 1} (best ${s.mapLevel[m.id] + 1})`;
+  return `best ${formatPercent(s.mapBest[m.id])}${s.map100[m.id] ? ' ✅' : ''}`;
 }
