@@ -21,7 +21,7 @@ npm run preview    # serve the build on :5101
 npm test           # vitest unit tests (economy, formatting, world, map gen and ladders, save)
 npm run sim        # headless balance simulation (greedy bot), prints the unlock timeline
 npm run sim -- --human --runs 6 --report   # 'human' model + PASS/FAIL pacing targets (DESIGN.md)
-npm run smoke      # Playwright smoke test + screenshots (needs `npm run dev` and Google Chrome)
+npm run smoke      # Playwright smoke test + screenshots (starts its own dev server; needs Google Chrome)
 ```
 
 ## Controls
@@ -72,6 +72,10 @@ time warp x1/x10/x100, unlock everything, +5 size in a round, end the round, sim
 It also shows frame timing and economy stats. Release builds (`npm run build`) leave the panel,
 its cheats and the `window.game` handle out entirely (`import.meta.env.DEV`), so `npm run smoke`
 must run against the dev server.
+
+Dev builds also take testing flags in the URL, e.g. `/?mute&fresh&seed=7`: `mute` (no audio),
+`fresh` (new save, never stored), `save=midgame` (fixture save, never stored) and `seed=N` (fixed
+world seed). See `src/dev/flags.ts`.
 
 Release output (`dist/`, ~7.3 MB): app JS 187 KB and three.js 544 KB in separate chunks
 (64 + 135 KB gzipped; serve with gzip or brotli), CSS 21 KB, one Latin Nunito font (39 KB) and

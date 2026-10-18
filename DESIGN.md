@@ -241,9 +241,11 @@ src/
                wind/surf swells, birds on the farm and suburb, gulls at the harbor) and
                music.ts: one CC0 track per map from public/music/ (CREDITS.md), looped
                gaplessly, cross-faded on map change, quieter in the hub, ducked while paused
+  dev/         dev-only URL testing flags (?mute, ?fresh, ?save=NAME, ?seed=N) and fixture saves
   game.ts      state machine (hub → round → results), autosave, offline, purchases
 tests/         vitest: format, economy, world/mapgen/save, map size ladders
-scripts/       sim.ts (balance), smoke.mjs / shots.mjs / ui-shots.mjs (Playwright screenshots)
+scripts/       sim.ts (balance), smoke.mjs / shots.mjs / ui-shots.mjs (Playwright screenshots),
+               devServer.mjs (each script starts its own Vite unless given a URL)
 ```
 
 ### Rendering notes

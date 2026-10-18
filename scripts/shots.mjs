@@ -1,7 +1,9 @@
-// Screenshots of every map mid-round. Requires the dev server on :5101.
+// Screenshots of every map mid-round. Starts its own dev server unless BASE_URL is set.
 // Usage: node scripts/shots.mjs [startSize] [mapId...]
 import { chromium } from 'playwright-core';
+import { devServer } from './devServer.mjs';
 
+const server = await devServer();
 const [sizeArg, ...only] = process.argv.slice(2);
 const size = Number(sizeArg ?? 10);
 const maps = only.length ? only : ['suburb', 'downtown', 'farm', 'harbor', 'airport', 'moon'];
@@ -10,7 +12,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto('http://localhost:5101/');
+await page.goto(server.base);
 await page.waitForFunction(() => window.game !== undefined);
 for (const id of maps) {
   await page.evaluate(
@@ -41,3 +43,4 @@ for (const id of maps) {
 }
 console.log(errors.length ? errors.join('\n') : 'no errors');
 await browser.close();
+await server.close();

@@ -1,0 +1,30 @@
+# CLAUDE.md
+
+Snack Hole is a hole-swallows-the-world browser game with an incremental meta-game, built with Vite, TypeScript and three.js, no UI framework. README.md covers features and controls. DESIGN.md holds the economy formulas, pacing targets and module map.
+
+## Commands
+
+- `npm run dev`: dev server on :5101 (strict port).
+- `npm run build`: `tsc --noEmit`, then the Vite build into `dist/`. There is no linter; `npx tsc --noEmit` is the type check.
+- `npm test`: vitest. One file: `npx vitest run tests/economy.test.ts`. One test: add `-t "<test name>"`.
+- `npm run sim -- --human --runs 6 --report`: headless balance sim that prints PASS/FAIL pacing targets. Run it after changing `src/config/balance.ts`. DESIGN.md's pacing table comes from this report.
+- Pushing to `main` deploys GitHub Pages (`.github/workflows/pages.yml` runs `npm test`, then builds with `--base=/<repo>/`). Build public asset URLs from `import.meta.env.BASE_URL`, as `src/audio/music.ts` does.
+
+## Architecture
+
+- **Pure core**: `src/core/` imports no DOM and no three.js, so vitest and `scripts/sim.ts` run the real round simulation and economy headless. Core randomness goes through the seeded `Rng` (`core/rng.ts`), which keeps maps, tests, the sim and `?seed` deterministic. `Math.random` appears only in render and audio.
+- **Sim to presentation**: `World` (`core/world.ts`) runs one round and reports what happened as `WEvent`s pushed onto `world.events` (`eat`, `level`, `ability`, `event`, `timeUp`, `snackedOut`, …). Every frame, `game.ts` drains the array to drive audio, HUD, particles and cash, then clears it. Add new feedback as a new event kind.
+- **Rendering**: `render/` draws the current `World` with one `InstancedMesh` per prop type. Only objects flagged `dirty` get their instance rewritten each frame, so sim code that moves or changes a `WObj` sets `o.dirty = true`.
+- **Game glue**: `game.ts` is the state machine (hub, round, results). It wires save, economy, `World`, renderer, UI and audio together. The hub runs a bot-driven demo `World` behind the menus.
+- **Numbers**: economy numbers live in `src/config/balance.ts` and the prop catalogue in `src/config/objects.ts`. `core/economy.ts` holds the formulas. DESIGN.md describes them, but the config files are the source of truth.
+- **Save**: `migrate()` in `core/save.ts` merges the stored save over `defaultSave()`, so a new field only needs a default. Renamed or reshaped data needs a `SAVE_VERSION` bump (`config/balance.ts`) plus a `MIGRATIONS` entry.
+- **Dev-only code**: the debug panel (dynamic import), `window.game` and `src/dev/` sit behind `import.meta.env.DEV`, so release builds drop them.
+
+## Testing
+
+- **Browser pane**: start `snack-hole-dev` (`.claude/launch.json`, local and gitignored, port 5180), then load `http://localhost:5180/?mute&fresh` before the first click. The user hears every sound the pane plays, so keep `?mute` on every URL. Port 5101 belongs to the user's own `npm run dev`.
+- **Start state**: the pane keeps its localStorage save across sessions, so begin from `?fresh` (new save) or `?save=midgame` (fixture save). Both keep the save in memory only. Flags: `src/dev/flags.ts`; fixtures: `src/dev/fixtures.ts`.
+- **Repeatable rounds**: add `?seed=N` and every round starts from the same world (objects, movers, RNG state). The sim steps on real frame time, so later frames drift.
+- **Driving the game**: dev builds expose `window.game`. `game.debugState` holds state, world, save and frame timings; `game.warp = 10` speeds time; `game.debugState.world.timeLeft = 0.01` ends a round. `scripts/smoke.mjs` shows the full flow.
+- **Hidden pane**: when the pane is hidden (`document.hidden`), the game pauses the round and shows the offline-earnings dialog on return. Run long or timing-sensitive checks headless.
+- **Headless**: `npm run smoke`, `scripts/shots.mjs`, `scripts/ui-shots.mjs` and `scripts/profile.mjs` start their own Vite on a free port (or use `BASE_URL`) and drive silent headless Chrome. After gameplay or UI changes, run `npm test` and `npm run smoke`. Smoke overwrites the tracked `screenshots/desktop-05-biground.png` (the README image); restore it with `git checkout` unless the image should change.

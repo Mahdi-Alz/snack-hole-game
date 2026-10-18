@@ -1,6 +1,9 @@
-// Screenshots of every hub tab and dialog with a mid-game save. Requires the dev server on :5101.
+// Screenshots of every hub tab and dialog with the `midgame` fixture save. Starts its own dev
+// server unless BASE_URL is set. Usage: node scripts/ui-shots.mjs [width] [height]
 import { chromium } from 'playwright-core';
+import { devServer } from './devServer.mjs';
 
+const server = await devServer();
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const width = Number(process.argv[2] ?? 1280);
 const height = Number(process.argv[3] ?? 800);
@@ -9,36 +12,8 @@ const page = await browser.newPage({ viewport: { width, height } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-await page.goto('http://localhost:5101/');
+await page.goto(new URL('?save=midgame', server.base).href);
 await page.waitForFunction(() => window.game !== undefined);
-await page.evaluate(() => {
-  const g = window.game;
-  const s = g.debugState.save;
-  s.stats.rounds = 30;
-  s.cash = 3.2e6;
-  s.runCash = 6e7;
-  s.lifetimeCash = 8e8;
-  s.dm = 12;
-  s.dmTotal = 20;
-  s.dmClaimed = 10;
-  s.stats.prestiges = 1;
-  s.helpers = 3;
-  s.helperLevel = 6;
-  s.abilities.dash = 3;
-  s.abilities.vortex = 1;
-  Object.assign(s.upgrades, { startSize: 20, speed: 5, cashValue: 6, roundTime: 2, growth: 3, magnet: 4, combo: 3, offline: 1 });
-  s.mapLevel.suburb = 18;
-  s.mapLevel.farm = 21;
-  Object.assign(s.maps, { downtown: true, farm: true });
-  s.mapBest.suburb = 1;
-  s.map100.suburb = true;
-  s.mapBest.downtown = 0.42;
-  s.selectedMap = 'farm';
-  for (const id of ['cone', 'hydrant', 'person', 'car', 'bus', 'house', 'tree', 'bench', 'dog', 'cow', 'chicken', 'pig', 'barn']) s.gulpedia[id] = 12;
-  s.achievements.push('firstBite', 'eat100', 'car', 'house', 'combo25');
-  s.skins.push('mint');
-  g.selectMap('farm');
-});
 await page.waitForTimeout(800);
 const tabs = ['upgrades', 'helpers', 'abilities', 'maps', 'singularity', 'gulpedia', 'trophies', 'skins'];
 for (const t of tabs) {
@@ -57,3 +32,4 @@ await page.waitForTimeout(300);
 await page.screenshot({ path: `screenshots/${tag}-debug.png` });
 console.log(errors.length ? errors.join('\n') : 'no errors');
 await browser.close();
+await server.close();

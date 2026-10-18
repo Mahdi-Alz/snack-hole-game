@@ -20,6 +20,8 @@ import { formatCash, formatNumber, setScientific } from './core/format';
 import { generateMap } from './core/mapgen';
 import { defaultSave, deserialize, serialize, type SaveData } from './core/save';
 import { World, type EventId, type WObj } from './core/world';
+import { fixtureSave } from './dev/fixtures';
+import { devFlags } from './dev/flags';
 import { GameRenderer } from './render/scene';
 import { cachedThumb, prewarmThumbs, thumbFor } from './render/thumbs';
 import type { DebugPanel } from './ui/debug';
@@ -48,6 +50,13 @@ function loadRaw(): string | null {
   } catch {
     return null;
   }
+}
+
+/** The stored save, or in dev a fresh / fixture save for testing (`?fresh`, `?save=NAME`). */
+function loadSave(): SaveData {
+  if (import.meta.env.DEV && devFlags.save !== null) return fixtureSave(devFlags.save);
+  if (import.meta.env.DEV && devFlags.fresh) return defaultSave();
+  return deserialize(loadRaw());
 }
 
 export class Game implements HubApi {
@@ -82,7 +91,7 @@ export class Game implements HubApi {
   private simMs = 0;
 
   constructor() {
-    this.save = deserialize(loadRaw());
+    this.save = loadSave();
     setScientific(this.save.settings.scientific);
     const canvas = document.getElementById('game') as HTMLCanvasElement;
     const ui = document.getElementById('ui')!;
@@ -153,6 +162,8 @@ export class Game implements HubApi {
 
   persist(): void {
     this.save.lastSeen = Date.now();
+    // `?fresh` / `?save=NAME` (dev): the test save stays in memory.
+    if (import.meta.env.DEV && devFlags.ephemeral) return;
     try {
       localStorage.setItem(SAVE_KEY, serialize(this.save));
     } catch {
@@ -188,7 +199,7 @@ export class Game implements HubApi {
     cfg.startLevel = Math.max(5, cfg.startLevel + 3);
     cfg.helpers = 0;
     cfg.cashMult = 0;
-    this.world = new World(generateMap(this.save.selectedMap), cfg, { demo: true, seed: Date.now() & 0xffff });
+    this.world = new World(generateMap(this.save.selectedMap), cfg, { demo: true, seed: devFlags.seed ?? (Date.now() & 0xffff) });
     this.renderer.setWorld(this.world);
     this.hubRestart = 0;
     prewarmThumbs(new Set(this.world.objects.map((o) => o.t)));
@@ -201,7 +212,7 @@ export class Game implements HubApi {
     this.setState('round');
     this.hub.show(false);
     const cfg = eco.buildRoundConfig(this.save);
-    this.world = new World(generateMap(this.save.selectedMap), cfg, { seed: (Date.now() & 0xffffff) + 1 });
+    this.world = new World(generateMap(this.save.selectedMap), cfg, { seed: devFlags.seed ?? (Date.now() & 0xffffff) + 1 });
     this.renderer.setWorld(this.world);
     this.hud.setup(this.world);
     this.hud.show(true);

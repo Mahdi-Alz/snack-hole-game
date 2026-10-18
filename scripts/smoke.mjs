@@ -1,10 +1,12 @@
 // Smoke test: loads the game, plays a round, buys upgrades, checks for console errors and
-// saves screenshots to screenshots/. Requires the dev server (npm run dev) on port 5101 and a
-// local Google Chrome. Usage: node scripts/smoke.mjs [baseUrl]
+// saves screenshots to screenshots/. Needs a local Google Chrome; starts its own dev server
+// unless given one. Usage: node scripts/smoke.mjs [baseUrl]
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { devServer } from './devServer.mjs';
 
-const base = process.argv[2] ?? 'http://localhost:5101/';
+const server = await devServer(process.argv[2]);
+const base = server.base;
 mkdirSync('screenshots', { recursive: true });
 const browser = await chromium.launch({
   channel: 'chrome',
@@ -133,6 +135,7 @@ async function run(viewport, prefix) {
     // Prestige flow.
     await page.evaluate(() => {
       const s = window.game.debugState.save;
+      s.maps.farm = true;
       s.maps.downtown = true;
       s.lifetimeCash = 6e8;
       window.game.hub.selectTab('singularity');
@@ -154,6 +157,7 @@ async function run(viewport, prefix) {
 await run({ width: 1280, height: 800 }, 'desktop');
 await run({ width: 390, height: 844 }, 'mobile');
 await browser.close();
+await server.close();
 if (errors.length) {
   console.error('Console errors:\n' + errors.join('\n'));
   process.exit(1);

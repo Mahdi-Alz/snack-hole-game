@@ -1,7 +1,11 @@
+// Per-frame cost of sim, object sync and render in a mid-size round. Starts its own dev server
+// unless BASE_URL is set.
 import { chromium } from 'playwright-core';
+import { devServer } from './devServer.mjs';
+const server = await devServer();
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-await page.goto('http://localhost:5101/');
+await page.goto(server.base);
 await page.waitForFunction(() => window.game !== undefined);
 await page.evaluate(() => { const s = window.game.debugState.save; s.stats.rounds = 2; s.upgrades.startSize = 14; s.helpers = 3; s.abilities.vortex = 1; });
 await page.evaluate(() => window.game.play());
@@ -27,3 +31,4 @@ const r = await page.evaluate(() => {
 });
 console.log(JSON.stringify(r));
 await browser.close();
+await server.close();

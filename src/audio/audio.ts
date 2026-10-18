@@ -1,3 +1,4 @@
+import { devFlags } from '../dev/flags';
 import { Music } from './music';
 
 /** Music bus level per game state (times MUSIC_LEVEL). */
@@ -34,6 +35,8 @@ export class Audio {
 
   /** Must be called from a user gesture. */
   unlock(): void {
+    // `?mute` (dev): stay silent for testing, never create the AudioContext.
+    if (devFlags.mute) return;
     if (!this.ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return;
