@@ -8,7 +8,7 @@ cars, houses, skyscrapers, cargo ships, jumbo jets — feeding a deep incrementa
 ## Run it
 
 ```bash
-cd snack-hole
+cd snack-hole-game
 npm install
 npm run dev        # http://localhost:5101
 ```
