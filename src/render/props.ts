@@ -43,10 +43,10 @@ function person(shirt: number, opts: { hat?: number; vest?: boolean; tint?: bool
   g.boxB(0.26, 0.62, 0.42, 0, 0.8, 0, shirt, { tint: opts.tint });
   g.boxB(0.14, 0.55, 0.12, 0, 0.85, -0.28, shirt, { tint: opts.tint }).boxB(0.14, 0.55, 0.12, 0, 0.85, 0.28, shirt, { tint: opts.tint });
   if (opts.vest) g.boxB(0.28, 0.4, 0.44, 0, 0.95, 0, C.orange);
-  g.box(0.28, 0.3, 0.28, 0, 1.6, 0, C.skin);
-  if (opts.hat !== undefined) g.cylB(0.2, 0.22, 0.14, 0, 1.73, 0, opts.hat, 10);
-  else if (opts.cap !== undefined) g.boxB(0.34, 0.1, 0.32, 0.02, 1.74, 0, opts.cap);
-  else g.boxB(0.3, 0.08, 0.3, -0.01, 1.74, 0, C.woodDark);
+  g.box(0.28, 0.3, 0.28, 0, 1.57, 0, C.skin);
+  if (opts.hat !== undefined) g.cylB(0.2, 0.22, 0.14, 0, 1.71, 0, opts.hat, 10);
+  else if (opts.cap !== undefined) g.boxB(0.34, 0.1, 0.32, 0.02, 1.72, 0, opts.cap);
+  else g.boxB(0.3, 0.08, 0.3, -0.01, 1.72, 0, C.woodDark);
   return g.build();
 }
 
@@ -163,7 +163,7 @@ export const BUILDERS: Record<string, Builder> = {
   bench: () => {
     const g = new G();
     g.boxB(1.8, 0.07, 0.5, 0, 0.42, 0.05, C.wood).boxB(1.8, 0.35, 0.06, 0, 0.5, -0.24, C.wood);
-    for (const x of [-0.75, 0.75]) g.boxB(0.07, 0.45, 0.45, x, 0, 0.05, C.dark).boxB(0.07, 0.4, 0.06, x, 0.45, -0.24, C.dark);
+    for (const x of [-0.75, 0.75]) g.boxB(0.07, 0.45, 0.45, x, 0, 0.05, C.dark).boxB(0.07, 0.37, 0.08, x, 0.45, -0.24, C.dark);
     return g.build();
   },
   barrier: () => {
@@ -253,14 +253,18 @@ export const BUILDERS: Record<string, Builder> = {
     new G()
       .cylB(0.12, 0.14, 0.2, 0, 0, 0, C.blue, 8)
       .ball(0.09, 0, 0.27, 0, C.skin)
-      .cone(0.08, 0.14, 0.05, 0.22, 0, C.white, 6)
+      .cone(0.075, 0.16, 0.08, 0.2, 0, C.white, 6, { rx: Math.PI })
       .cone(0.1, 0.22, 0, 0.42, 0, C.red, 8)
       .build(),
   picnic: () => {
     const g = new G();
     g.boxB(2.0, 0.08, 0.8, 0, 0.72, 0, C.wood);
     for (const z of [-0.65, 0.65]) g.boxB(2.0, 0.06, 0.3, 0, 0.42, z, C.wood);
-    for (const x of [-0.8, 0.8]) g.box(0.08, 0.9, 0.08, x, 0.4, -0.3, C.woodDark, { rx: 0.5 }).box(0.08, 0.9, 0.08, x, 0.4, 0.3, C.woodDark, { rx: -0.5 });
+    for (const x of [-0.8, 0.8]) {
+      g.box(0.08, 0.86, 0.08, x, 0.39, -0.3, C.woodDark, { rx: 0.5 }).box(0.08, 0.86, 0.08, x, 0.39, 0.3, C.woodDark, { rx: -0.5 });
+      // Cross beam carrying both seats.
+      g.boxB(0.08, 0.06, 1.6, x, 0.36, 0, C.woodDark);
+    }
     return g.build();
   },
   slide: () => {
@@ -306,7 +310,7 @@ export const BUILDERS: Record<string, Builder> = {
       .boxB(1.8, 0.15, 1.8, 0, 1.2, 0, C.offwhite)
       .cylB(0.3, 0.4, 1.6, 0, 1.35, 0, 0x6aa38a, 8)
       .ball(0.28, 0, 3.2, 0, 0x6aa38a)
-      .box(0.15, 0.9, 0.15, 0, 3.3, 0.38, 0x6aa38a, { rx: -0.3 })
+      .box(0.15, 0.9, 0.15, 0, 3.3, 0.38, 0x6aa38a, { rx: 0.3 })
       .cone(0.12, 0.35, 0, 3.85, 0.52, C.gold, 6)
       .build(),
   fountain: () =>
@@ -353,17 +357,24 @@ export const BUILDERS: Record<string, Builder> = {
     g.boxB(1.9, 2.3, 2.4, 3.0, 0.5, 0, C.red, { tint: true });
     g.boxB(0.1, 0.9, 2.1, 3.96, 1.6, 0, C.glass);
     g.boxB(5.8, 2.8, 2.55, -1.0, 0.6, 0, C.offwhite);
-    for (const x of [-3.0, -1.9, 3.0]) for (const z of [-1.1, 1.1]) g.wheel(0.5, 0.35, x, 0.5, z);
+    for (const x of [-3.0, -1.9, 3.0]) for (const z of [-1.15, 1.15]) g.wheel(0.5, 0.35, x, 0.5, z);
     return g.build();
   },
   schoolbus: () => {
     const g = new G();
     g.boxB(7.4, 2.3, 2.45, -0.7, 0.45, 0, C.yellow);
-    g.boxB(1.6, 1.2, 2.3, 3.7, 0.45, 0, C.yellow);
-    g.boxB(7.42, 0.7, 2.47, -0.7, 1.75, 0, C.glassDark);
-    g.boxB(7.44, 0.12, 2.49, -0.7, 1.2, 0, C.black);
-    g.boxB(0.1, 0.8, 2.0, 2.95, 1.75, 0, C.glass);
-    for (const x of [-3.0, 2.8]) for (const z of [-1.1, 1.1]) g.wheel(0.5, 0.35, x, 0.5, z);
+    // Side windows stop short of the front so the windshield gets yellow corner pillars.
+    g.boxB(7.31, 0.7, 2.47, -0.755, 1.75, 0, C.glassDark);
+    g.boxB(7.42, 0.12, 2.49, -0.72, 1.2, 0, C.black);
+    // Split windshield with red warning lights above it.
+    g.boxB(0.06, 0.7, 2.2, 3.02, 1.75, 0, C.glass).boxB(0.08, 0.72, 0.08, 3.03, 1.74, 0, C.yellow);
+    for (const z of [-0.9, 0.9]) g.boxB(0.06, 0.16, 0.26, 3.02, 2.52, z, C.red);
+    // Hood with grille, headlights and bumper.
+    g.boxB(1.5, 1.05, 2.2, 3.75, 0.45, 0, C.yellow);
+    g.boxB(0.06, 0.55, 1.1, 4.52, 0.75, 0, C.dark);
+    for (const z of [-0.8, 0.8]) g.box(0.06, 0.22, 0.28, 4.52, 1.15, z, C.lamp);
+    g.boxB(0.2, 0.22, 2.35, 4.58, 0.38, 0, C.black);
+    for (const x of [-3.0, 3.7]) for (const z of [-1.1, 1.1]) g.wheel(0.5, 0.35, x, 0.5, z);
     return g.build();
   },
   bus: () => {
@@ -457,9 +468,11 @@ export const BUILDERS: Record<string, Builder> = {
     g.boxB(18, 9, 14, -1, 0, 0, C.stone);
     for (let z = -5.5; z <= 5.5; z += 2.2) g.cylB(0.5, 0.55, 7.5, 9.2, 0.6, z, C.offwhite, 10);
     g.boxB(2.5, 0.6, 15, 9.0, 0, 0, C.offwhite).boxB(3, 0.8, 15, 9.0, 8, 0, C.offwhite);
-    g.roof(3, 15, 2.6, 9, 8.8, 0, C.stone, { ry: Math.PI / 2 });
+    // Pediment over the portico: gable faces the front (+X).
+    g.roof(3, 15, 2.6, 9, 8.8, 0, C.stone);
     for (const y of [2, 5.5]) g.boxB(18.1, 1.4, 14.1, -1, y, 0, C.glassDark);
-    g.boxB(5, 5, 5, -1, 9, 0, C.offwhite).dome(2.6, -1, 14, 0, 0x6aa38a).ball(0.9, 2.55, 11.5, 0, C.white, 1);
+    // Clock tower with the clock face on its front wall.
+    g.boxB(5, 5, 5, -1, 9, 0, C.offwhite).dome(2.6, -1, 14, 0, 0x6aa38a).cyl(0.9, 0.9, 0.12, 1.56, 11.5, 0, C.white, 12, { rz: Math.PI / 2 });
     g.cylB(0.15, 0.15, 3, -1, 16.4, 0, C.gold, 6);
     return g.build();
   },
@@ -527,7 +540,7 @@ export const BUILDERS: Record<string, Builder> = {
     const g = new G();
     g.boxB(1.6, 0.8, 0.8, 0, 0.7, 0, C.white);
     g.boxB(0.5, 0.4, 0.82, -0.2, 0.95, 0, C.black).boxB(0.35, 0.3, 0.82, 0.45, 0.8, 0, C.black);
-    g.box(0.5, 0.45, 0.45, 1.0, 1.35, 0, C.white).box(0.2, 0.25, 0.42, 1.28, 1.25, 0, C.pink);
+    g.box(0.5, 0.45, 0.45, 1.0, 1.35, 0, C.white).box(0.2, 0.25, 0.42, 1.28, 1.26, 0, C.pink);
     g.box(0.06, 0.15, 0.06, 0.9, 1.65, -0.18, C.offwhite).box(0.06, 0.15, 0.06, 0.9, 1.65, 0.18, C.offwhite);
     for (const x of [-0.6, 0.6]) for (const z of [-0.28, 0.28]) g.boxB(0.15, 0.7, 0.15, x, 0, z, C.white);
     g.box(0.25, 0.12, 0.3, -0.2, 0.66, 0, C.pink);
@@ -539,7 +552,8 @@ export const BUILDERS: Record<string, Builder> = {
     g.box(0.3, 0.8, 0.3, 0.8, 1.7, 0, C.brown, { rz: -0.5 }).box(0.55, 0.28, 0.28, 1.15, 2.0, 0, C.brown);
     g.box(0.12, 0.5, 0.08, 0.7, 1.9, 0, C.woodDark, { rz: -0.5 });
     for (const x of [-0.55, 0.55]) for (const z of [-0.18, 0.18]) g.boxB(0.12, 0.95, 0.12, x, 0, z, C.brown);
-    g.box(0.1, 0.6, 0.1, -0.8, 1.1, 0, C.woodDark, { rz: 0.4 });
+    // Tail hangs from the rump, trailing back.
+    g.box(0.1, 0.6, 0.1, -0.84, 1.17, 0, C.woodDark, { rz: -0.4 });
     return g.build();
   },
   tractor: () => {
@@ -575,17 +589,19 @@ export const BUILDERS: Record<string, Builder> = {
   },
   windmill: () => {
     const g = new G();
-    g.cylB(1.6, 2.6, 10, 0, 0, 0, C.offwhite, 8).cone(2.0, 2.4, 0, 11.2, 0, C.darkred, 8);
+    // Tower turned so a flat face (not an edge) looks forward, where the door sits.
+    g.cylB(1.6, 2.6, 10, 0, 0, 0, C.offwhite, 8, { ry: Math.PI / 8 }).cone(2.0, 2.4, 0, 11.2, 0, C.darkred, 8, { ry: Math.PI / 8 });
     g.cyl(0.3, 0.3, 1.2, 1.9, 10.2, 0, C.dark, 6, { rz: Math.PI / 2 });
     for (let i = 0; i < 4; i++) g.box(0.12, 4.8, 0.7, 2.4, 10.2, 0, C.wood, { rx: (i * Math.PI) / 2 + 0.3, sy: 1 });
-    g.boxB(0.1, 1.8, 1.0, 2.45, 0, 0, C.woodDark);
+    // Door leans with the tapered wall.
+    g.box(0.1, 1.8, 1.0, 2.35, 0.9, 0, C.woodDark, { rz: 0.092 });
     return g.build();
   },
   farmhouse: () => {
     const g = new G();
     g.boxB(8, 4.6, 7, 0, 0, 0, C.offwhite);
     g.roof(8.6, 7.8, 3.0, 0, 4.6, 0, C.brick);
-    g.boxB(1.4, 0.2, 7, 4.6, 2.6, 0, C.wood).boxB(0.15, 2.6, 0.15, 5.2, 0, -3.2, C.wood).boxB(0.15, 2.6, 0.15, 5.2, 0, 3.2, C.wood);
+    g.boxB(1.4, 0.2, 7.1, 4.6, 2.6, 0, C.wood).boxB(0.15, 2.6, 0.15, 5.2, 0, -3.2, C.wood).boxB(0.15, 2.6, 0.15, 5.2, 0, 3.2, C.wood);
     g.boxB(0.1, 2.0, 1.0, 4.02, 0, 0, C.woodDark);
     for (const z of [-2.2, 2.2]) g.boxB(0.1, 1.0, 1.0, 4.02, 1.4, z, C.glass).boxB(0.1, 1.0, 1.0, 4.02, 3.2, z, C.glass);
     g.boxB(0.8, 2, 0.8, -2, 5.5, 2, C.brick);
@@ -597,7 +613,8 @@ export const BUILDERS: Record<string, Builder> = {
     g.roof(11.6, 9.2, 3.4, 0, 5.5, 0, 0x6e2a2a, { ry: 0 });
     g.boxB(0.15, 4, 4, 5.52, 0, 0, C.red);
     g.box(0.18, 5.4, 0.25, 5.56, 2, 0, C.white, { rx: 0.78 }).box(0.18, 5.4, 0.25, 5.56, 2, 0, C.white, { rx: -0.78 });
-    g.boxB(0.2, 0.25, 4.2, 5.56, 4, 0, C.white).boxB(0.18, 1.2, 1.4, 5.56, 5.6, 0, C.white);
+    // Hay loft door sits on the gable, which overhangs the wall.
+    g.boxB(0.2, 0.25, 4.2, 5.56, 4, 0, C.white).boxB(0.18, 1.2, 1.4, 5.86, 5.6, 0, C.white);
     return g.build();
   },
 
@@ -609,6 +626,8 @@ export const BUILDERS: Record<string, Builder> = {
       .cone(0.04, 0.12, 0.34, 0.29, 0, C.yellow, 4, { rz: -Math.PI / 2 })
       .box(0.25, 0.04, 0.38, -0.05, 0.28, -0.2, C.lightgrey, { rx: 0.3 })
       .box(0.25, 0.04, 0.38, -0.05, 0.28, 0.2, C.lightgrey, { rx: -0.3 })
+      .boxB(0.03, 0.1, 0.03, 0, 0, -0.05, C.yellow)
+      .boxB(0.03, 0.1, 0.03, 0, 0, 0.05, C.yellow)
       .build(),
   barrel: () => new G().cylB(0.33, 0.33, 0.95, 0, 0, 0, C.blue, 10, { tint: true }).cylB(0.34, 0.34, 0.06, 0, 0.25, 0, C.dark, 10).cylB(0.34, 0.34, 0.06, 0, 0.65, 0, C.dark, 10).build(),
   buoy: () => new G().cylB(0.38, 0.32, 0.5, 0, 0, 0, C.red, 10).cylB(0.36, 0.38, 0.2, 0, 0.5, 0, C.white, 10).cone(0.3, 0.4, 0, 0.9, 0, C.red, 10).ball(0.08, 0, 1.15, 0, C.lamp).build(),
@@ -622,14 +641,15 @@ export const BUILDERS: Record<string, Builder> = {
   fishstall: () => {
     const g = new G();
     g.boxB(2.6, 0.9, 1.4, 0, 0, 0, C.wood);
-    for (const x of [-1.3, 1.3]) for (const z of [-0.7, 0.7]) g.boxB(0.08, 2.4, 0.08, x, 0, z, C.dark);
+    // Posts stop under the canopy, which slopes down toward +Z.
+    for (const x of [-1.3, 1.3]) for (const z of [-0.7, 0.7]) g.boxB(0.08, z < 0 ? 2.48 : 2.2, 0.08, x, 0, z, C.dark);
     for (let i = 0; i < 6; i++) g.box(0.5, 0.08, 2.0, -1.25 + i * 0.5, 2.35, 0, i % 2 ? C.white : C.blue, { rx: 0.2 });
     for (let i = 0; i < 6; i++) g.box(0.45, 0.1, 0.18, -0.9 + (i % 3) * 0.8, 0.95, -0.3 + Math.floor(i / 3) * 0.5, 0x8fa8c0);
     return g.build();
   },
   forklift: () => {
     const g = new G();
-    g.boxB(1.8, 0.9, 1.2, -0.3, 0.3, 0, C.yellow).boxB(0.7, 0.6, 1.2, -0.95, 0.4, 0, C.dark);
+    g.boxB(1.8, 0.9, 1.2, -0.3, 0.3, 0, C.yellow).boxB(0.7, 0.6, 1.24, -0.95, 0.4, 0, C.dark);
     for (const [x, z] of [[-0.9, -0.5], [-0.9, 0.5], [0.3, -0.5], [0.3, 0.5]]) g.boxB(0.06, 1.3, 0.06, x, 1.2, z, C.dark);
     g.boxB(1.4, 0.08, 1.2, -0.3, 2.45, 0, C.yellow);
     g.boxB(0.12, 2.2, 1.0, 0.75, 0.1, 0, C.dark).box(1.0, 0.06, 0.15, 1.25, 0.15, -0.3, C.grey).box(1.0, 0.06, 0.15, 1.25, 0.15, 0.3, C.grey);
@@ -638,10 +658,10 @@ export const BUILDERS: Record<string, Builder> = {
   },
   boat: () => {
     const g = new G();
-    g.boxB(3.4, 0.8, 1.9, -0.6, 0.2, 0, C.white).wedge(1.4, 0.8, 1.9, 1.8, 0.2, 0, C.white, { ry: 0 });
-    g.boxB(3.42, 0.2, 1.92, -0.6, 0.55, 0, C.blue, { tint: true });
-    g.boxB(0.15, 0.5, 1.4, 0.4, 1.0, 0, C.glass, { rz: 0.4 });
-    g.boxB(0.6, 0.35, 1.2, -0.8, 1.0, 0, C.offwhite).boxB(0.4, 0.6, 0.35, -2.4, 0.5, 0, C.dark);
+    g.boxB(3.4, 0.8, 1.9, -0.6, 0, 0, C.white).bow(1.4, 0.8, 1.9, 1.1, 0, 0, C.white);
+    g.boxB(3.42, 0.2, 1.92, -0.61, 0.35, 0, C.blue, { tint: true }).bow(1.44, 0.2, 1.92, 1.1, 0.35, 0, C.blue, { tint: true });
+    g.boxB(0.15, 0.5, 1.4, 0.4, 0.8, 0, C.glass, { rz: 0.4 });
+    g.boxB(0.6, 0.35, 1.2, -0.8, 0.8, 0, C.offwhite).boxB(0.4, 0.6, 0.35, -2.4, 0.3, 0, C.dark);
     return g.build();
   },
   container: () => {
@@ -653,8 +673,8 @@ export const BUILDERS: Record<string, Builder> = {
   },
   fishingboat: () => {
     const g = new G();
-    g.boxB(6.5, 1.6, 3.3, -0.9, 0, 0, C.blue, { tint: true }).wedge(2.4, 1.6, 3.3, 3.55, 0, 0, C.blue, { tint: true });
-    g.boxB(6.5, 0.25, 3.32, -0.9, 1.55, 0, C.white);
+    g.boxB(6.5, 1.6, 3.3, -0.9, 0, 0, C.blue, { tint: true }).bow(2.4, 1.6, 3.3, 2.35, 0, 0, C.blue, { tint: true });
+    g.boxB(6.52, 0.25, 3.32, -0.91, 1.55, 0, C.white).bow(2.44, 0.2, 3.32, 2.35, 1.6, 0, C.white);
     g.boxB(2.4, 1.8, 2.4, -1.8, 1.8, 0, C.offwhite).boxB(2.42, 0.6, 2.42, -1.8, 2.8, 0, C.glassDark).boxB(2.6, 0.15, 2.6, -1.8, 3.6, 0, C.red);
     g.cylB(0.1, 0.1, 4.2, 1.3, 1.8, 0, C.dark, 6).box(3, 0.08, 0.08, 1.3, 4.6, 0, C.dark, { rz: 0.6 });
     return g.build();
@@ -668,8 +688,8 @@ export const BUILDERS: Record<string, Builder> = {
   },
   yacht: () => {
     const g = new G();
-    g.boxB(10.5, 2.0, 4.4, -1.6, 0, 0, C.white).wedge(3.5, 2.0, 4.4, 5.35, 0, 0, C.white);
-    g.boxB(10.5, 0.3, 4.42, -1.6, 0.6, 0, C.navy);
+    g.boxB(10.5, 2.0, 4.4, -1.6, 0, 0, C.white).bow(3.5, 2.0, 4.4, 3.65, 0, 0, C.white);
+    g.boxB(10.52, 0.3, 4.42, -1.61, 0.6, 0, C.navy).bow(3.56, 0.3, 4.43, 3.65, 0.6, 0, C.navy);
     g.boxB(7, 1.3, 3.6, -2.0, 2.0, 0, C.offwhite).boxB(7.02, 0.6, 3.62, -2.0, 2.4, 0, C.glassDark);
     g.boxB(4.5, 1.1, 3.0, -2.6, 3.3, 0, C.white).boxB(4.52, 0.5, 3.02, -2.6, 3.6, 0, C.glassDark);
     g.cylB(0.08, 0.08, 1.2, -3, 4.4, 0, C.dark, 6);
@@ -679,6 +699,8 @@ export const BUILDERS: Record<string, Builder> = {
     const g = new G();
     for (const x of [-4, 4]) for (const z of [-4, 4]) g.boxB(0.8, 22, 0.8, x, 0, z, C.orange);
     for (const x of [-4, 4]) g.box(0.5, 0.5, 8.6, x, 8, 0, C.orange).box(0.5, 0.5, 8.6, x, 16, 0, C.orange);
+    // Top beams across each leg pair carry the boom.
+    for (const x of [-4, 4]) g.box(0.8, 0.8, 8.8, x, 21.6, 0, C.orange);
     g.boxB(28, 1.6, 2.4, 6, 22, 0, C.orange).boxB(4, 2.6, 3.4, -3, 23.6, 0, C.yellow).boxB(1.6, 1.4, 1.6, 2, 21.4, 0, C.glassDark);
     g.box(0.1, 8, 0.1, 14, 18, 0, C.dark).boxB(2.4, 0.4, 1.4, 14, 13.8, 0, C.yellow);
     return g.build();
@@ -693,8 +715,9 @@ export const BUILDERS: Record<string, Builder> = {
   },
   cargoship: () => {
     const g = new G();
-    g.boxB(50, 5, 11.6, -4, 0, 0, C.navy).wedge(9, 5, 11.6, 25.5, 0, 0, C.navy);
-    g.boxB(50, 1.6, 11.7, -4, 0, 0, C.darkred).boxB(52, 0.6, 11.8, -3, 5, 0, C.white);
+    g.boxB(50, 5, 11.6, -4, 0, 0, C.navy).bow(9, 5, 11.6, 21, 0, 0, C.navy);
+    g.boxB(50.1, 1.6, 11.7, -4.05, 0, 0, C.darkred).bow(9.1, 1.6, 11.7, 21, 0, 0, C.darkred);
+    g.boxB(50.1, 0.6, 11.8, -3.95, 5, 0, C.white).bow(9.1, 0.6, 11.8, 21, 5, 0, C.white);
     const cols = [C.red, C.blue, C.green, C.orange, C.yellow, C.purple, 0x2bb3b1];
     let k = 0;
     for (let x = -14; x <= 20; x += 6.3) {
@@ -711,20 +734,30 @@ export const BUILDERS: Record<string, Builder> = {
 
   // ------------------------------------------------------------ airport
   runwaylight: () => new G().cylB(0.12, 0.14, 0.25, 0, 0, 0, C.dark, 6).ball(0.1, 0, 0.32, 0, C.lamp).build(),
-  suitcase: () => new G().boxB(0.55, 0.65, 0.28, 0, 0.05, 0, C.blue, { tint: true }).box(0.2, 0.06, 0.06, 0, 0.75, 0, C.dark).build(),
-  windsock: () =>
-    new G()
-      .cylB(0.06, 0.08, 3.8, 0, 0, 0, C.white, 6)
-      .cone(0.3, 0.6, 0.35, 3.6, 0, C.orange, 8, { rz: Math.PI / 2 })
-      .cone(0.25, 0.6, 0.9, 3.6, 0, C.white, 8, { rz: Math.PI / 2 })
-      .cone(0.2, 0.6, 1.4, 3.6, 0, C.orange, 8, { rz: Math.PI / 2 })
-      .build(),
+  suitcase: () => {
+    const g = new G();
+    g.boxB(0.55, 0.65, 0.28, 0, 0.05, 0, C.blue, { tint: true });
+    for (const x of [-0.2, 0.2]) {
+      g.boxB(0.06, 0.05, 0.06, x, 0, 0, C.dark);
+      g.boxB(0.03, 0.08, 0.03, x * 0.4, 0.7, 0, C.dark);
+    }
+    g.boxB(0.2, 0.04, 0.05, 0, 0.76, 0, C.dark);
+    return g.build();
+  },
+  windsock: () => {
+    const g = new G();
+    g.cylB(0.06, 0.08, 3.8, 0, 0, 0, C.white, 6);
+    // Sock tapers away from the pole in orange/white bands.
+    for (let i = 0; i < 3; i++) g.cyl(0.25 - i * 0.05, 0.3 - i * 0.05, 0.5, 0.3 + i * 0.5, 3.6, 0, i % 2 ? C.white : C.orange, 8, { rz: -Math.PI / 2 });
+    return g.build();
+  },
   luggagecart: () => {
     const g = new G();
     g.boxB(2.3, 0.15, 1.3, 0, 0.35, 0, C.grey).box(0.6, 0.06, 0.06, 1.4, 0.4, 0, C.dark);
     for (const x of [-0.8, 0.8]) for (const z of [-0.55, 0.55]) g.wheel(0.18, 0.12, x, 0.18, z);
     const cols = [C.red, C.blue, C.yellow, C.green, C.purple];
-    for (let i = 0; i < 5; i++) g.boxB(0.6, 0.45, 0.35, -0.8 + (i % 3) * 0.75, 0.5 + Math.floor(i / 3) * 0.45, (i % 2) * 0.4 - 0.2, cols[i]);
+    // Two layers of bags, the top ones stacked on the bottom ones.
+    for (let i = 0; i < 5; i++) g.boxB(0.6, 0.45, 0.35, -0.8 + (i % 3) * 0.75, 0.5 + Math.floor(i / 3) * 0.45, ((i % 3) % 2) * 0.4 - 0.2, cols[i]);
     return g.build();
   },
   stairtruck: () => {
@@ -732,6 +765,8 @@ export const BUILDERS: Record<string, Builder> = {
     g.boxB(4.8, 0.8, 2.1, 0, 0.4, 0, C.white).boxB(1.4, 1.2, 2.0, 1.7, 1.2, 0, C.yellow).boxB(0.1, 0.6, 1.8, 2.42, 1.6, 0, C.glass);
     g.box(4.2, 0.2, 1.2, -0.4, 2.2, 0, C.lightgrey, { rz: 0.45 });
     g.box(4.2, 0.6, 0.06, -0.4, 2.6, -0.6, C.dark, { rz: 0.45 }).box(4.2, 0.6, 0.06, -0.4, 2.6, 0.6, C.dark, { rz: 0.45 });
+    // Frame holding up the raised end of the stairs.
+    g.boxB(0.15, 1.4, 1.0, 0.6, 1.2, 0, C.grey);
     for (const x of [-1.5, 1.5]) for (const z of [-1.0, 1.0]) g.wheel(0.4, 0.3, x, 0.4, z);
     return g.build();
   },
@@ -745,7 +780,7 @@ export const BUILDERS: Record<string, Builder> = {
   fueltruck: () => {
     const g = new G();
     g.boxB(1.9, 2.1, 2.4, 3.0, 0.5, 0, C.yellow).boxB(0.1, 0.8, 2.1, 3.96, 1.5, 0, C.glass);
-    g.cyl(1.2, 1.2, 5.6, -1.0, 1.75, 0, C.lightgrey, 12, { rz: Math.PI / 2 }).boxB(5.6, 0.3, 2.0, -1.0, 0.5, 0, C.dark);
+    g.cyl(1.2, 1.2, 5.6, -1.0, 1.75, 0, C.lightgrey, 12, { rz: Math.PI / 2 }).boxB(5.5, 0.3, 2.0, -1.0, 0.5, 0, C.dark);
     g.cyl(1.22, 1.22, 0.3, -1.0, 1.75, 0, C.red, 12, { rz: Math.PI / 2 });
     for (const x of [-3.0, -1.8, 3.0]) for (const z of [-1.1, 1.1]) g.wheel(0.5, 0.35, x, 0.5, z);
     return g.build();
@@ -755,14 +790,16 @@ export const BUILDERS: Record<string, Builder> = {
     // Fuselage tapers toward the tail (-X); the nose cone continues the thick front end.
     g.cyl(0.4, 0.55, 6.5, -0.3, 1.3, 0, C.white, 10, { rz: Math.PI / 2 }).cone(0.55, 0.9, 3.4, 1.3, 0, C.white, 10, { rz: -Math.PI / 2 });
     g.box(6.6, 0.1, 1.0, -0.3, 1.32, 0, C.red, { tint: true });
-    g.box(1.5, 0.15, 9, 0.6, 1.85, 0, C.white).box(1.52, 0.17, 1.2, 0.6, 1.85, -3.9, C.red, { tint: true }).box(1.52, 0.17, 1.2, 0.6, 1.85, 3.9, C.red, { tint: true });
+    g.box(1.5, 0.15, 9, 0.6, 1.85, 0, C.white).box(1.52, 0.17, 1.22, 0.6, 1.85, -3.9, C.red, { tint: true }).box(1.52, 0.17, 1.22, 0.6, 1.85, 3.9, C.red, { tint: true });
     g.box(1.2, 0.5, 0.9, 1.0, 1.75, 0, C.glass);
     g.boxB(1.0, 1.3, 0.12, -3.3, 1.3, 0, C.red, { tint: true }).box(0.9, 0.1, 3.0, -3.3, 1.45, 0, C.white);
     g.box(0.08, 1.8, 0.2, 3.9, 1.3, 0, C.dark);
     g.cylB(0.05, 0.05, 1.0, 1.0, 0, -0.9, C.dark).cylB(0.05, 0.05, 1.0, 1.0, 0, 0.9, C.dark);
     // Strut tying the main legs into the belly.
     g.box(0.1, 0.08, 1.85, 1.0, 0.95, 0, C.dark);
-    g.wheel(0.25, 0.15, 1.0, 0.25, -0.9).wheel(0.25, 0.15, 1.0, 0.25, 0.9).wheel(0.15, 0.1, -3.0, 0.5, 0);
+    // Tail wheel on its own strut, touching the ground.
+    g.wheel(0.25, 0.15, 1.0, 0.25, -0.9).wheel(0.25, 0.15, 1.0, 0.25, 0.9).wheel(0.15, 0.1, -3.0, 0.15, 0);
+    g.cylB(0.04, 0.04, 0.75, -3.0, 0.15, 0, C.dark, 6);
     return g.build();
   },
   controltower: () => {
@@ -789,7 +826,8 @@ export const BUILDERS: Record<string, Builder> = {
     g.boxB(48, 10, 20, 0, 0, 0, C.offwhite);
     g.boxB(48.2, 6, 20.2, 0, 2, 0, C.glass);
     for (let x = -21; x <= 21; x += 6) g.box(6.2, 0.6, 22, x, 11, 0, C.steel, { rx: x % 12 === 0 ? 0.12 : -0.12 });
-    for (let x = -16; x <= 16; x += 16) g.boxB(2.2, 2.6, 7, x, 4, 13, C.lightgrey).boxB(2.4, 2.4, 2.4, x, 4, 16.5, C.dark);
+    // Jet bridges, each rotunda on a support leg.
+    for (let x = -16; x <= 16; x += 16) g.boxB(2.2, 2.6, 7, x, 4, 13, C.lightgrey).boxB(2.4, 2.4, 2.4, x, 4, 16.5, C.dark).cylB(0.3, 0.4, 4, x, 0, 16.5, C.grey, 6);
     g.boxB(10, 2, 0.4, 0, 12, -10.3, C.blue);
     return g.build();
   },
@@ -800,7 +838,7 @@ export const BUILDERS: Record<string, Builder> = {
     new G()
       .cylB(0.03, 0.03, 2.2, -0.45, 0, 0, C.lightgrey, 6)
       .boxB(0.9, 0.55, 0.03, 0, 1.55, 0, C.red, { tint: true })
-      .boxB(0.35, 0.3, 0.035, -0.25, 1.8, 0, C.navy)
+      .boxB(0.35, 0.29, 0.05, -0.25, 1.8, 0, C.navy)
       .build(),
   astronaut: () => {
     const g = new G();
@@ -828,7 +866,9 @@ export const BUILDERS: Record<string, Builder> = {
   },
   cheese: () => {
     const g = new G();
-    g.cylB(1.5, 1.5, 1.4, 0, 0, 0, 0xffd34d, 16).boxB(1.5, 1.42, 1.5, 0.75, 0.0, 0.75, 0xffe27a, { ry: 0 });
+    // Wheel with a quarter cut away (the +X/+Z quadrant), showing the paler inside.
+    g.add(new THREE.CylinderGeometry(1.5, 1.5, 1.4, 16, 1, false, Math.PI / 2, Math.PI * 1.5), 0xffd34d, 0, 0.7, 0);
+    g.boxB(1.5, 1.4, 0.04, 0.75, 0, 0.02, 0xffe27a).boxB(0.04, 1.4, 1.5, 0.02, 0, 0.75, 0xffe27a);
     for (const [x, y, z] of [[1.3, 0.8, -0.5], [-0.6, 0.5, 1.35], [-1.2, 1.0, -0.8], [0.4, 1.43, -0.6]]) g.ball(0.2, x, y, z, 0xe0a820);
     return g.build();
   },
@@ -837,7 +877,7 @@ export const BUILDERS: Record<string, Builder> = {
     const g = new G();
     g.cylB(0.1, 0.1, 1.0, 0, 0, 0, C.grey, 6);
     g.box(3.9, 0.1, 2.3, 0, 1.15, 0, 0x22337a, { rz: 0, rx: 0.35 });
-    for (let x = -1.5; x <= 1.5; x += 1) g.box(0.04, 0.12, 2.3, x, 1.16, 0, C.lightgrey, { rx: 0.35 });
+    for (let x = -1.5; x <= 1.5; x += 1) g.box(0.04, 0.12, 2.3, x, 1.17, 0, C.lightgrey, { rx: 0.35 });
     return g.build();
   },
   rover: () => {
@@ -850,7 +890,7 @@ export const BUILDERS: Record<string, Builder> = {
   dish: () =>
     new G()
       .cylB(1.2, 1.5, 0.6, 0, 0, 0, C.lightgrey, 8)
-      .cylB(0.3, 0.3, 2.2, 0, 0.6, 0, C.grey, 6)
+      .cylB(0.3, 0.3, 2.6, 0, 0.6, 0, C.grey, 6)
       .cone(1.9, 0.9, 0.3, 3.4, 0, C.white, 14, { rz: Math.PI / 2 + 0.6 })
       .cylB(0.05, 0.05, 1.4, 0.7, 3.2, 0, C.dark, 4, { rz: -0.9 })
       .build(),
@@ -860,7 +900,8 @@ export const BUILDERS: Record<string, Builder> = {
     g.cylB(1.6, 1.8, 1.8, 0, 3.6, 0, C.offwhite, 8).cone(1.0, 0.6, 0, 5.7, 0, C.lightgrey, 8);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      g.box(0.15, 2.6, 0.15, Math.cos(a) * 2.4, 1.2, Math.sin(a) * 2.4, C.lightgrey, { rx: Math.sin(a) * 0.5, rz: -Math.cos(a) * 0.5 });
+      // Legs lean in: feet out on the pads, tops tucked under the descent stage.
+      g.box(0.15, 2.6, 0.15, Math.cos(a) * 2.4, 1.2, Math.sin(a) * 2.4, C.lightgrey, { rx: -Math.sin(a) * 0.5, rz: Math.cos(a) * 0.5 });
       g.cylB(0.5, 0.5, 0.1, Math.cos(a) * 3.0, 0, Math.sin(a) * 3.0, C.lightgrey, 8);
     }
     return g.build();
@@ -872,7 +913,8 @@ export const BUILDERS: Record<string, Builder> = {
     for (let y = 6; y < 26; y += 8) g.cylB(2.25, 2.25, 0.6, 0, y, 0, C.dark, 12);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2;
-      g.box(0.2, 4, 1.6, Math.cos(a) * 2.6, 3.2, Math.sin(a) * 2.6, C.red, { ry: -a });
+      // Fins stick straight out of the body.
+      g.box(1.0, 4, 0.2, Math.cos(a) * 2.6, 3.2, Math.sin(a) * 2.6, C.red, { ry: -a });
     }
     g.cylB(1.0, 1.2, 1.2, 0, 1, 0, C.dark, 10);
     return g.build();
@@ -893,7 +935,8 @@ export const BUILDERS: Record<string, Builder> = {
   bigdome: () => {
     const g = new G();
     g.cylB(11, 11, 0.8, 0, 0, 0, C.lightgrey, 20).dome(10.6, 0, 0.8, 0, 0xa8f0d8, 20, 8);
-    for (let i = 0; i < 8; i++) g.box(0.3, 0.3, 21.4, 0, 6, 0, C.white, { ry: (i * Math.PI) / 8, rx: 0, sy: 1 });
+    // Ribs arching over the dome, meeting at the top.
+    for (let i = 0; i < 4; i++) g.add(new THREE.TorusGeometry(10.65, 0.15, 3, 12, Math.PI), C.white, 0, 0.8, 0, { ry: (i * Math.PI) / 4 });
     return g.build();
   },
   moonbase: () => {

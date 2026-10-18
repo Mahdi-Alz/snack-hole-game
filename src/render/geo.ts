@@ -154,6 +154,19 @@ export class G {
     return this.add(convex(tris), color, x, y, z, o);
   }
 
+  /** Pointed bow: prism whose base (width `beam` along Z) is at x and whose tip is `len` ahead (+X), base at y. */
+  bow(len: number, h: number, beam: number, x: number, y: number, z: number, color: number, o?: PartOpts): this {
+    const hb = beam / 2;
+    const A = [0, 0, -hb];
+    const B = [0, 0, hb];
+    const C = [len, 0, 0];
+    const D = [0, h, -hb];
+    const E = [0, h, hb];
+    const F = [len, h, 0];
+    const tris = [A, C, B, D, E, F, A, B, E, A, E, D, B, C, F, B, F, E, A, D, F, A, F, C];
+    return this.add(convex(tris), color, x, y, z, o);
+  }
+
   build(): THREE.BufferGeometry {
     const g = mergeGeometries(this.parts, false);
     for (const p of this.parts) p.dispose();
