@@ -32,7 +32,8 @@ the first upgrade is bought ~30–40 s after starting.
   plus what Mega Mouth would fit while it is active or recharges before time runs out.
 - Every 0.5 s the round checks it. It is **snacked out** when nothing is reachable, or when no
   more growth is possible and the reachable leftovers would pay less than 5% of the round's cash
-  so far. A random event still to come starts at once instead.
+  so far. Round cash includes combo, so the leftovers are valued at the combo cap. A random event
+  still to come starts at once instead.
 - Finishing early (snacked out or map cleared) pays a time bonus of +1% of the round's cash per
   second left, up to +50%.
 

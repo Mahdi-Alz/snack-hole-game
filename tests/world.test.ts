@@ -148,11 +148,15 @@ describe('round end', () => {
     expect(new World(ladderMap(0, big), buildRoundConfig(s)).reachableLeft()).toBe(1);
   });
 
-  it('counts the round as done when it cannot grow and only crumbs are left', () => {
+  it('counts the round as done when it cannot grow and only crumbs are left, valued at the combo cap', () => {
     const w = new World(ladderMap(3, 0.3), cfg(12));
     expect(w.reachable().levels).toBe(0);
     expect(w.snackedOut()).toBe(false);
-    w.cash = (w.reachable().cash / ROUND_END.crumbs) * 2;
+    // Round cash includes combo, so the leftovers count at the best combo they could pay.
+    const crumbsAt = (w.reachable().cash * w.cfg.comboCap) / ROUND_END.crumbs;
+    w.cash = crumbsAt * 0.9;
+    expect(w.snackedOut()).toBe(false);
+    w.cash = crumbsAt * 1.1;
     expect(w.snackedOut()).toBe(true);
   });
 

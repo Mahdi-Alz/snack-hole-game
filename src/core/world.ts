@@ -639,11 +639,13 @@ export class World {
 
   /**
    * The round is over once nothing reachable is left, or once the hole cannot grow any more and
-   * only crumbs remain (worth less than `crumbs` of what this round has paid so far).
+   * only crumbs remain (worth less than `crumbs` of what this round has paid so far). Round cash
+   * already includes combo, so the leftovers are valued at the combo cap: a map with plenty left
+   * lets the player build the combo back up, and judging them before combo ends rounds early.
    */
   snackedOut(): boolean {
     const r = this.reachable();
-    return r.count === 0 || (r.levels === 0 && r.cash < this.cash * ROUND_END.crumbs);
+    return r.count === 0 || (r.levels === 0 && r.cash * this.cfg.comboCap < this.cash * ROUND_END.crumbs);
   }
 
   // ------------------------------------------------------------ abilities

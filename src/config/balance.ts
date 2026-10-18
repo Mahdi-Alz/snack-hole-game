@@ -46,8 +46,8 @@ export const ROUND = {
 
 /**
  * A round ends early once nothing reachable is left, or once the hole cannot grow any more and
- * the reachable leftovers would pay less than `crumbs` x the round's cash so far (see
- * World.snackedOut). It pays a bonus of `bonusPerSecond` x round cash per second left, up to
+ * the reachable leftovers would pay less than `crumbs` x the round's cash so far, valued at the
+ * combo cap (see World.snackedOut). It pays a bonus of `bonusPerSecond` x round cash per second left, up to
  * `bonusCap`.
  */
 export const ROUND_END = {
