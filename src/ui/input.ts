@@ -1,10 +1,18 @@
+/** Standard gamepad mapping: A, B, X, Y, LB, RB, LT, RT, then Start at 9 and the d-pad at 12–15. */
+export const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, start: 9, up: 12, down: 13, left: 14, right: 15 } as const;
+const STICK_DEADZONE = 0.2;
+
 /**
  * Steering input. Mouse: direction from screen centre to the pointer. Touch: virtual joystick
- * from where the finger went down. Keyboard (WASD / arrows) overrides both.
+ * from where the finger went down. Keyboard (WASD / arrows) overrides everything, then a
+ * gamepad's left stick or d-pad. Keys are read by physical position (`KeyboardEvent.code`), so
+ * WASD works on AZERTY and other layouts too.
  * Output is a world-space vector: screen right = +X, screen up = -Z, magnitude 0..1.
  */
 export class Input {
   private keys = new Set<string>();
+  private pad: Gamepad | null = null;
+  private padDown: boolean[] = [];
   private mouse: { x: number; y: number } | null = null;
   private touchId: number | null = null;
   private touchOrigin = { x: 0, y: 0 };
@@ -14,6 +22,8 @@ export class Input {
   enabled = false;
   onAbility: ((slot: number) => void) | null = null;
   onKey: ((key: string) => void) | null = null;
+  /** A gamepad button went down (see PAD); fires whether or not steering is enabled. */
+  onPadButton: ((button: number) => void) | null = null;
 
   constructor(surface: HTMLElement) {
     this.joy = document.createElement('div');
@@ -24,18 +34,19 @@ export class Input {
     document.body.appendChild(this.joy);
 
     window.addEventListener('keydown', (e) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      const k = e.key.toLowerCase();
-      this.keys.add(k);
-      if (this.enabled) {
-        if (k === ' ' || k === '1') this.onAbility?.(0);
-        if (k === '2') this.onAbility?.(1);
-        if (k === '3') this.onAbility?.(2);
-        if (k === ' ' || k.startsWith('arrow')) e.preventDefault();
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const c = e.code;
+      this.keys.add(c);
+      if (this.enabled && !e.repeat) {
+        if (c === 'Space' || c === 'Digit1' || c === 'Numpad1') this.onAbility?.(0);
+        if (c === 'Digit2' || c === 'Numpad2') this.onAbility?.(1);
+        if (c === 'Digit3' || c === 'Numpad3') this.onAbility?.(2);
       }
+      if (this.enabled && (c === 'Space' || c.startsWith('Arrow'))) e.preventDefault();
       this.onKey?.(e.key);
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.mouse = null;
@@ -108,18 +119,58 @@ export class Input {
     this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
   }
 
+  /** Reads the first connected gamepad; call once per frame before vector(). */
+  pollGamepad(): void {
+    const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+    this.pad = null;
+    for (const p of pads) {
+      if (p?.connected) {
+        this.pad = p;
+        break;
+      }
+    }
+    const buttons = this.pad?.buttons ?? [];
+    for (let i = 0; i < buttons.length; i++) {
+      const down = buttons[i].pressed;
+      if (down && !this.padDown[i]) this.onPadButton?.(i);
+      this.padDown[i] = down;
+    }
+    if (!this.pad) this.padDown.length = 0;
+  }
+
+  /** Gamepad steering: d-pad, else the left stick past its deadzone (rescaled to 0..1). */
+  private padVector(): { x: number; z: number } | null {
+    const p = this.pad;
+    if (!p) return null;
+    const b = (i: number) => (p.buttons[i]?.pressed ? 1 : 0);
+    const dx = b(PAD.right) - b(PAD.left);
+    const dz = b(PAD.down) - b(PAD.up);
+    if (dx || dz) {
+      const m = Math.hypot(dx, dz);
+      return { x: dx / m, z: dz / m };
+    }
+    const ax = p.axes[0] ?? 0;
+    const az = p.axes[1] ?? 0;
+    const d = Math.hypot(ax, az);
+    if (d < STICK_DEADZONE) return null;
+    const m = Math.min(1, (d - STICK_DEADZONE) / (1 - STICK_DEADZONE));
+    return { x: (ax / d) * m, z: (az / d) * m };
+  }
+
   vector(): { x: number; z: number } {
     if (!this.enabled) return { x: 0, z: 0 };
     let kx = 0;
     let kz = 0;
-    if (this.keys.has('a') || this.keys.has('arrowleft')) kx -= 1;
-    if (this.keys.has('d') || this.keys.has('arrowright')) kx += 1;
-    if (this.keys.has('w') || this.keys.has('arrowup')) kz -= 1;
-    if (this.keys.has('s') || this.keys.has('arrowdown')) kz += 1;
+    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) kx -= 1;
+    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) kx += 1;
+    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) kz -= 1;
+    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) kz += 1;
     if (kx || kz) {
       const m = Math.hypot(kx, kz);
       return { x: kx / m, z: kz / m };
     }
+    const pad = this.padVector();
+    if (pad) return pad;
     if (this.touchId !== null) {
       const R = this.joyRadius();
       const dx = this.touchCur.x - this.touchOrigin.x;

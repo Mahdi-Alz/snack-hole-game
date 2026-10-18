@@ -4,7 +4,7 @@ let host: HTMLDivElement | null = null;
 
 function container(): HTMLDivElement {
   if (!host) {
-    host = h('div', { class: 'toasts' });
+    host = h('div', { class: 'toasts', role: 'status', 'aria-live': 'polite' });
     document.getElementById('ui')!.appendChild(host);
   }
   return host;

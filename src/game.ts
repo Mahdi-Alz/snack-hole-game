@@ -1,35 +1,50 @@
 import {
   ABILITIES,
   AUTOSAVE_SECONDS,
+  BACKUP_SAVE_KEY,
   LEGACY_SAVE_KEY,
   PRESTIGE,
   SAVE_KEY,
   SIZE,
   SKINS,
+  UNREADABLE_SAVE_KEY,
   type AbilityId,
   type DmUpgradeId,
   type MapId,
   type UpgradeId,
 } from './config/balance';
-import { OBJECT_TYPES, footprintOf } from './config/objects';
+import { OBJECT_TYPES } from './config/objects';
 import { Audio } from './audio/audio';
 import { checkAchievements } from './core/achievements';
 import { Bot } from './core/bot';
 import * as eco from './core/economy';
 import { formatCash, formatNumber, setScientific } from './core/format';
 import { generateMap } from './core/mapgen';
-import { defaultSave, deserialize, serialize, type SaveData } from './core/save';
+import { decodeSaveText, defaultSave, encodeSaveText, parseSave, serialize, type SaveData } from './core/save';
 import { World, type EventId, type WObj } from './core/world';
 import { fixtureSave } from './dev/fixtures';
 import { devFlags } from './dev/flags';
+import { reducedMotion } from './render/motion';
 import { GameRenderer } from './render/scene';
 import { cachedThumb, prewarmThumbs, thumbFor } from './render/thumbs';
 import type { DebugPanel } from './ui/debug';
-import { anyModalOpen, confirmDialog, openModalCount, showOffline, showPause, showResults, showSettings, type ModalHandle } from './ui/dialogs';
+import {
+  activateFocused,
+  anyModalOpen,
+  confirmDialog,
+  infoDialog,
+  openModalCount,
+  showOffline,
+  showPause,
+  showResults,
+  showSettings,
+  type ModalHandle,
+} from './ui/dialogs';
 import { h } from './ui/dom';
+import { showFatal } from './ui/fatal';
 import { Hub } from './ui/hub';
 import { Hud } from './ui/hud';
-import { Input } from './ui/input';
+import { Input, PAD } from './ui/input';
 import type { HubApi } from './ui/tabs';
 import { toast } from './ui/toast';
 
@@ -44,19 +59,59 @@ const EVENT_TEXT: Record<EventId, [string, string]> = {
   stampede: ['🐄 STAMPEDE!', 'Here comes the herd'],
 };
 
-function loadRaw(): string | null {
+/** Consecutive failing frames before the game stops and shows an error screen. */
+const MAX_FAILED_FRAMES = 30;
+
+/** Dev test saves (`?fresh`, `?save=NAME`) live in memory, so tests never touch the real save. */
+const memoryStore = new Map<string, string>();
+const ephemeral = (): boolean => import.meta.env.DEV && devFlags.ephemeral;
+
+function storeGet(key: string): string | null {
+  if (ephemeral()) return memoryStore.get(key) ?? null;
   try {
-    return localStorage.getItem(SAVE_KEY) ?? localStorage.getItem(LEGACY_SAVE_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-/** The stored save, or in dev a fresh / fixture save for testing (`?fresh`, `?save=NAME`). */
-function loadSave(): SaveData {
-  if (import.meta.env.DEV && devFlags.save !== null) return fixtureSave(devFlags.save);
-  if (import.meta.env.DEV && devFlags.fresh) return defaultSave();
-  return deserialize(loadRaw());
+/** Writes `value`; false when storage is full or blocked. */
+function storeSet(key: string, value: string): boolean {
+  if (ephemeral()) {
+    memoryStore.set(key, value);
+    return true;
+  }
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The stored save (or a dev test save), plus the raw text when the stored save is unreadable. */
+function loadSave(): { save: SaveData; unreadable: string | null } {
+  if (import.meta.env.DEV && devFlags.save !== null) return { save: fixtureSave(devFlags.save), unreadable: null };
+  if (import.meta.env.DEV && devFlags.fresh) return { save: defaultSave(), unreadable: null };
+  const raw = storeGet(SAVE_KEY) ?? storeGet(LEGACY_SAVE_KEY);
+  if (!raw) return { save: defaultSave(), unreadable: null };
+  const save = parseSave(raw);
+  return save ? { save, unreadable: null } : { save: defaultSave(), unreadable: raw };
+}
+
+/** The save replaced by the last import, restore or reset, if it is still readable. */
+function readBackup(): { at: number; save: SaveData } | null {
+  const text = storeGet(BACKUP_SAVE_KEY);
+  if (!text) return null;
+  try {
+    const b: unknown = JSON.parse(text);
+    if (typeof b !== 'object' || b === null) return null;
+    const { at, save } = b as { at?: unknown; save?: unknown };
+    const parsed = typeof save === 'string' ? parseSave(save) : null;
+    return parsed && typeof at === 'number' ? { at, save: parsed } : null;
+  } catch {
+    return null;
+  }
 }
 
 export class Game implements HubApi {
@@ -89,14 +144,28 @@ export class Game implements HubApi {
   private landmarkBannerUntil = 0;
   private frameMs = 0;
   private simMs = 0;
+  /** Raw text of a stored save that could not be read (kept aside, reported on start). */
+  private unreadable: string | null;
+  /** Another tab saved the game since this one loaded: this tab stops saving. */
+  private stale = false;
+  /** The save text this tab last wrote, and when (to spot other tabs' writes). */
+  private lastWritten: string | null = null;
+  private lastWriteAt = 0;
+  /** Shown while the WebGL context is lost. */
+  private gpuNotice: ModalHandle | null = null;
+  private failedFrames = 0;
+  private crashed = false;
 
   constructor() {
-    this.save = loadSave();
+    const loaded = loadSave();
+    this.save = loaded.save;
+    this.unreadable = loaded.unreadable;
     setScientific(this.save.settings.scientific);
     const canvas = document.getElementById('game') as HTMLCanvasElement;
     const ui = document.getElementById('ui')!;
     this.renderer = new GameRenderer(canvas, this.currentSkin());
     this.renderer.setShadows(this.save.settings.shadows);
+    this.renderer.setQuality(this.save.settings.quality);
     this.input = new Input(canvas);
     this.hud = new Hud(ui);
     this.hub = new Hub(ui, this);
@@ -108,6 +177,7 @@ export class Game implements HubApi {
     this.hud.onAbility = (id) => this.useAbility(id);
     this.hud.onPause = () => this.pause();
     this.input.onAbility = (slot) => this.useAbility(ABILITIES[slot].id);
+    this.input.onPadButton = (b) => this.onPadButton(b);
     this.input.onKey = (key) => {
       if (key === '`' || key === '~') this.debug?.toggle();
       if (key === 'Escape' && this.state === 'hub' && !anyModalOpen()) this.openSettings();
@@ -123,9 +193,27 @@ export class Game implements HubApi {
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
-    window.addEventListener('resize', () => this.renderer.resize());
-    window.addEventListener('beforeunload', () => this.persist());
+    // pagehide (not beforeunload) also fires on mobile and keeps the page eligible for bfcache.
+    window.addEventListener('pagehide', () => this.persist());
+    window.addEventListener('storage', (e) => {
+      if (e.key !== SAVE_KEY || e.newValue === null) return;
+      // Two tabs starting together (session restore) each save once; only the older one steps back.
+      const at = (() => {
+        try {
+          return Number((JSON.parse(e.newValue) as { lastSeen?: unknown }).lastSeen) || Infinity;
+        } catch {
+          return Infinity;
+        }
+      })();
+      if (at >= this.lastWriteAt) this.onSavedElsewhere();
+    });
+    // A page restored from the back/forward cache missed storage events while it was away.
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted && this.lastWritten !== null && storeGet(SAVE_KEY) !== this.lastWritten) this.onSavedElsewhere();
+    });
     document.addEventListener('visibilitychange', () => this.onVisibility());
+    canvas.addEventListener('webglcontextlost', () => this.onContextLost());
+    canvas.addEventListener('webglcontextrestored', () => this.onContextRestored());
     this.applySettings();
   }
 
@@ -134,24 +222,41 @@ export class Game implements HubApi {
     const now = Date.now();
     const off = eco.computeOffline(this.save, now);
     this.enterHub();
+    this.recoverPendingRound();
     if (off.earned > 0) {
       eco.earn(this.save, off.earned);
       showOffline(off.awaySeconds, off.creditedSeconds, off.earned, off.awaySeconds > off.creditedSeconds);
     }
-    this.save.lastSeen = now;
+    if (this.unreadable !== null) {
+      // Keep the first damaged copy; if it cannot be stored, this session must not save over it.
+      const kept = storeGet(UNREADABLE_SAVE_KEY) !== null || storeSet(UNREADABLE_SAVE_KEY, this.unreadable);
+      if (!kept) this.stale = true;
+      this.unreadable = null;
+      infoDialog(
+        'Your save could not be read',
+        kept
+          ? 'The stored save was damaged, so a new game has started. The damaged copy is kept in this browser instead of being overwritten.'
+          : 'The stored save was damaged and there was no room to keep a copy, so this session will not save over it.',
+      );
+    }
     this.grantAchievements();
+    // Store the credited offline time and recovered round now, so a quick reload cannot pay them twice.
+    this.persist();
     requestAnimationFrame((t) => this.frame(t));
   }
 
   private onVisibility(): void {
+    if (this.crashed) return;
     if (document.hidden) {
       this.hiddenAt = Date.now();
-      this.pause();
+      this.pause(true);
+      this.audio.setHidden(true);
       this.persist();
     } else if (this.hiddenAt) {
-      // Tab was in the background: treat it like offline time.
+      this.audio.setHidden(false);
+      // Tab was in the background: treat it like offline time (unless another tab took over).
       const off = eco.computeOffline({ ...this.save, lastSeen: this.hiddenAt }, Date.now());
-      if (off.earned > 0) {
+      if (off.earned > 0 && !this.stale) {
         eco.earn(this.save, off.earned);
         showOffline(off.awaySeconds, off.creditedSeconds, off.earned, off.awaySeconds > off.creditedSeconds);
       }
@@ -161,14 +266,61 @@ export class Game implements HubApi {
   }
 
   persist(): void {
+    if (this.stale) return;
     this.save.lastSeen = Date.now();
-    // `?fresh` / `?save=NAME` (dev): the test save stays in memory.
-    if (import.meta.env.DEV && devFlags.ephemeral) return;
-    try {
-      localStorage.setItem(SAVE_KEY, serialize(this.save));
-    } catch {
-      /* storage full or blocked */
+    this.save.pendingRoundCash = this.state === 'round' && this.world ? this.world.cash : 0;
+    const text = serialize(this.save);
+    if (storeSet(SAVE_KEY, text)) {
+      this.lastWritten = text;
+      this.lastWriteAt = this.save.lastSeen;
     }
+  }
+
+  /** Credits the cash of a round that was still running when the game last saved. */
+  private recoverPendingRound(): void {
+    const cash = this.save.pendingRoundCash;
+    if (!(cash > 0)) return;
+    this.save.pendingRoundCash = 0;
+    eco.earn(this.save, cash);
+    toast('Unfinished round', `+${formatCash(cash)} from the round you left`, { icon: '💰' });
+  }
+
+  /** Another tab or window saved the game. Saving from this one too would overwrite that progress. */
+  private onSavedElsewhere(): void {
+    if (this.stale || ephemeral()) return;
+    this.stale = true;
+    this.pause(true);
+    infoDialog(
+      'Playing in another tab',
+      'Snack Hole was saved from another tab or window, so this one has stopped saving to keep that progress.',
+      'Play here instead',
+      () => location.reload(),
+    );
+  }
+
+  private onContextLost(): void {
+    this.pause(true);
+    this.gpuNotice ??= infoDialog('Graphics paused', 'The graphics card reset. The game will continue as soon as the picture comes back.', 'Reload', () =>
+      location.reload(),
+    );
+  }
+
+  private onContextRestored(): void {
+    this.gpuNotice?.close();
+    this.gpuNotice = null;
+  }
+
+  /** Replaces the whole save (import, restore, reset), keeping the old one as the backup. */
+  private replaceSave(next: SaveData): void {
+    storeSet(BACKUP_SAVE_KEY, JSON.stringify({ at: Date.now(), save: serialize(this.save) }));
+    this.save = next;
+    this.recoverPendingRound();
+    this.applySettings();
+    this.renderer.setSkin(this.currentSkin());
+    this.grantAchievements();
+    this.hub.selectTab('upgrades');
+    this.enterHub();
+    this.persist();
   }
 
   private currentSkin() {
@@ -207,6 +359,16 @@ export class Game implements HubApi {
 
   play(): void {
     if (this.state !== 'hub' || anyModalOpen()) return;
+    // A half-started round has no way out, so any error here stops the game with the error screen.
+    try {
+      this.startRound();
+    } catch (err) {
+      console.error(err);
+      this.crash(err);
+    }
+  }
+
+  private startRound(): void {
     this.audio.unlock();
     this.audio.click();
     this.setState('round');
@@ -230,12 +392,13 @@ export class Game implements HubApi {
     this.audio.setMusicMode('round');
   }
 
-  pause(): void {
+  /** Opens the pause menu mid-round; `silent` skips the click (tab hidden, GPU reset, other tab). */
+  pause(silent = false): void {
     const w = this.world;
     if (this.state !== 'round' || this.pauseMenu || !w || !w.running) return;
     this.input.enabled = false;
     this.input.reset();
-    this.audio.click();
+    if (!silent) this.audio.click();
     this.audio.setMusicMode('paused');
     this.pauseMenu = showPause(
       {
@@ -335,8 +498,37 @@ export class Game implements HubApi {
   }
 
   // ------------------------------------------------------------------ frame
+  /**
+   * The next frame is requested before this one runs, so one exception cannot stop the loop. A
+   * frame that keeps failing stops the game with an error screen instead of a silent freeze.
+   */
   private frame(now: number): void {
+    if (this.crashed) return;
+    requestAnimationFrame((t) => this.frame(t));
+    try {
+      this.tick(now);
+      this.failedFrames = 0;
+    } catch (err) {
+      console.error(err);
+      if (++this.failedFrames >= MAX_FAILED_FRAMES) this.crash(err);
+    }
+  }
+
+  private crash(err: unknown): void {
+    this.crashed = true;
+    this.persist();
+    this.audio.setHidden(true);
+    const save = encodeSaveText(serialize(this.save));
+    showFatal('Snack Hole hit a problem', `The game stopped because of an error: ${err instanceof Error ? err.message : String(err)}. Your progress is saved.`, [
+      { label: 'Reload', onClick: () => location.reload() },
+      { label: 'Copy save', onClick: () => void navigator.clipboard?.writeText(save) },
+    ]);
+  }
+
+  private tick(now: number): void {
     const t0 = performance.now();
+    // Before reading any state: a button can start a round or pause it.
+    this.input.pollGamepad();
     const realDt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     const paused = this.pauseMenu !== null;
@@ -368,6 +560,7 @@ export class Game implements HubApi {
         if ((w.percentEaten > 0.35 && this.hubRestart > 45) || this.hubRestart > 240) this.startDemo();
       }
     }
+    this.renderer.noteFrame(realDt);
     this.renderer.render(paused ? 0 : realDt * timeScale, this.world, this.state === 'hub' ? 'hub' : 'round');
     if (w && this.state !== 'hub') this.hud.update(w, paused ? 0 : realDt);
     this.hub.update(realDt);
@@ -381,7 +574,6 @@ export class Game implements HubApi {
     }
     if (this.debug?.open) this.debug.refresh();
     this.frameMs += (performance.now() - t0 - this.frameMs) * 0.05;
-    requestAnimationFrame((t) => this.frame(t));
   }
 
   private handleEvents(w: World): void {
@@ -402,7 +594,7 @@ export class Game implements HubApi {
             const p = this.renderer.project(e.o.x, e.o.h, e.o.z);
             if (p) this.hud.floater(p.x, p.y, `+${formatCash(e.cash)}`, 'helper', 0.75);
           }
-          if (big && this.save.settings.shake) this.renderer.shake(Math.min(1, e.o.f / (w.main.r * 3)));
+          if (big) this.shake(Math.min(1, e.o.f / (w.main.r * 3)));
           break;
         }
         case 'level': {
@@ -432,7 +624,7 @@ export class Game implements HubApi {
           if (e.id === 'mega') this.renderer.pulseHole(1.5);
           if (e.id === 'dash') {
             this.renderer.dashBurst(w);
-            if (this.save.settings.shake) this.renderer.shake(0.35);
+            this.shake(0.35);
           }
           break;
         case 'event':
@@ -453,7 +645,7 @@ export class Game implements HubApi {
         case 'cleared':
           this.hud.hideHint();
           this.audio.fanfare(true);
-          this.renderer.shake(1);
+          this.shake(1);
           this.hud.banner('MAP CLEARED!', 'You ate absolutely everything', 'big');
           break;
         case 'snackedOut':
@@ -462,7 +654,15 @@ export class Game implements HubApi {
           this.hud.banner('ALL SNACKED OUT!', e.bonusFrac > 0 ? `Time bonus +${Math.round(e.bonusFrac * 100)}%` : 'Nothing left your size', 'big');
           break;
         case 'end':
-          if (this.state === 'round') this.endRound();
+          if (this.state === 'round') {
+            // A failed end-of-round would leave the game stuck without a results screen.
+            try {
+              this.endRound();
+            } catch (err) {
+              console.error(err);
+              this.crash(err);
+            }
+          }
           break;
         case 'gone':
           break;
@@ -527,13 +727,12 @@ export class Game implements HubApi {
     const def = OBJECT_TYPES[o.t];
     if (!def.landmark || this.state !== 'round') return;
     const firstEver = !this.save.gulpedia[def.id] && !this.roundDiscoveries.has(o.t);
-    const shake = this.save.settings.shake;
     if (firstEver) {
       this.landmarkCd = 2.5;
       this.slowmo = SLOWMO;
       this.landmarkBannerUntil = performance.now() + 1500;
       this.renderer.landmarkBurst(w, o.f, true);
-      if (shake) this.renderer.shake(0.9);
+      this.shake(0.9);
       this.audio.landmark(o.f, true);
       this.hud.banner('NEW LANDMARK!', `${o.gold ? '✨ Golden ' : ''}${def.name} · +${formatCash(cash)}`);
       return;
@@ -541,7 +740,7 @@ export class Game implements HubApi {
     if (this.landmarkCd > 0 || o.f < 0.55 * SIZE.fit * w.main.r) return;
     this.landmarkCd = 2.5;
     this.renderer.landmarkBurst(w, o.f, false);
-    if (shake) this.renderer.shake(0.5);
+    this.shake(0.5);
     this.audio.landmark(o.f, false);
   }
 
@@ -552,10 +751,28 @@ export class Game implements HubApi {
     const names = new Set<string>();
     for (const o of w.objects) {
       if (o.event) continue;
-      const f = footprintOf(OBJECT_TYPES[o.t]);
-      if (f <= fitNow && f > fitBefore) names.add(OBJECT_TYPES[o.t].name);
+      if (o.f <= fitNow && o.f > fitBefore) names.add(OBJECT_TYPES[o.t].name);
     }
     return [...names].slice(0, 3).join(', ');
+  }
+
+  /**
+   * Gamepad buttons. Dialogs: A presses the focused button, B or Start closes (like Esc). Hub: A or
+   * Start plays. Round: A / RB Dash, X / LB Vortex, Y / RT Mega Mouth, Start pauses.
+   */
+  private onPadButton(b: number): void {
+    if (anyModalOpen()) {
+      if (b === PAD.a) activateFocused();
+      else if (b === PAD.b || b === PAD.start) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      return;
+    }
+    if (this.state === 'hub' && (b === PAD.a || b === PAD.start)) this.play();
+    else if (this.state === 'round') {
+      if (b === PAD.start) this.pause();
+      else if (b === PAD.a || b === PAD.rb) this.useAbility('dash');
+      else if (b === PAD.x || b === PAD.lb) this.useAbility('vortex');
+      else if (b === PAD.y || b === PAD.rt) this.useAbility('mega');
+    }
   }
 
   useAbility(id: AbilityId): void {
@@ -644,7 +861,7 @@ export class Game implements HubApi {
   private doPrestige(): void {
     this.save = eco.applyPrestige(this.save);
     this.audio.singularity();
-    this.renderer.shake(1.5);
+    this.shake(1.5);
     this.grantAchievements();
     this.persist();
     this.flash();
@@ -652,7 +869,13 @@ export class Game implements HubApi {
     this.enterHub();
   }
 
+  /** Screen shake, unless the player turned it off or prefers reduced motion. */
+  private shake(amount: number): void {
+    if (this.save.settings.shake && !reducedMotion()) this.renderer.shake(amount);
+  }
+
   private flash(): void {
+    if (reducedMotion()) return;
     const el = h('div', { class: 'flash' });
     document.getElementById('ui')!.appendChild(el);
     setTimeout(() => el.remove(), 1600);
@@ -672,6 +895,7 @@ export class Game implements HubApi {
     setScientific(st.scientific);
     this.audio.setVolume(st.volume, st.muted, st.music, st.tunes);
     this.renderer.setShadows(st.shadows);
+    this.renderer.setQuality(st.quality);
   }
 
   openSettings(): void {
@@ -681,28 +905,43 @@ export class Game implements HubApi {
         this.applySettings();
         this.hub.markDirty();
       },
-      reset: () => {
-        this.save = defaultSave();
-        this.persist();
-        this.applySettings();
-        this.renderer.setSkin(this.currentSkin());
-        this.hub.selectTab('upgrades');
-        this.enterHub();
-      },
-      exportSave: () => btoa(unescape(encodeURIComponent(serialize(this.save)))),
-      importSave: (text) => {
+      reset: () => this.replaceSave(defaultSave()),
+      exportSave: () => encodeSaveText(serialize(this.save)),
+      importSave: (text, done) => {
+        let next: SaveData | null;
         try {
-          const json = decodeURIComponent(escape(atob(text)));
-          JSON.parse(json);
-          this.save = deserialize(json);
-          this.persist();
-          this.applySettings();
-          this.renderer.setSkin(this.currentSkin());
-          this.enterHub();
-          return true;
+          next = parseSave(decodeSaveText(text));
+          // A save the game cannot start a round with is rejected before it replaces anything.
+          if (next) eco.buildRoundConfig(next);
         } catch {
-          return false;
+          next = null;
         }
+        if (!next) return false;
+        const save = next;
+        confirmDialog(
+          'Import this save?',
+          `It has ${formatCash(save.cash)}, ${formatNumber(save.dm)} Dark Matter and ${formatNumber(save.stats.rounds)} rounds played. It replaces your current progress, which is kept as a backup you can restore from Settings.`,
+          'Import',
+          () => {
+            done();
+            this.replaceSave(save);
+          },
+        );
+        return true;
+      },
+      backupTime: () => readBackup()?.at ?? null,
+      restoreBackup: (done) => {
+        const b = readBackup();
+        if (!b) return;
+        confirmDialog(
+          'Restore the backup?',
+          `This brings back the save from ${new Date(b.at).toLocaleString()} (${formatCash(b.save.cash)}, ${formatNumber(b.save.dm)} Dark Matter). Your current progress becomes the backup.`,
+          'Restore',
+          () => {
+            done();
+            this.replaceSave(b.save);
+          },
+        );
       },
     });
   }

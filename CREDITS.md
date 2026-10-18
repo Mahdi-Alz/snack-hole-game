@@ -10,7 +10,7 @@ models or textures are used; the only downloaded assets are the music tracks bel
 ## Music
 
 All tracks are CC0 (public domain dedication, no attribution required), downloaded from
-OpenGameArt and re-encoded to 128 kbps MP3 with loudness normalisation (`public/music/`).
+OpenGameArt and re-encoded to 96 kbps MP3 with loudness normalisation (`public/music/`).
 Credited with thanks anyway.
 
 | Map | Track | Author | Source | License |

@@ -10,7 +10,7 @@
  *   npm run sim -- --moon            # hold the first Singularity until Moon Base is unlocked
  *   npm run sim -- --seed 7          # different (but reproducible) world seeds
  */
-import { ABILITIES, DM_UPGRADES, HELPERS, MAPS, UPGRADES, type MapId } from '../src/config/balance';
+import { ABILITIES, DM_UPGRADES, HELPERS, MAPS, SIZE, UPGRADES, type MapId } from '../src/config/balance';
 import { OBJECT_TYPES } from '../src/config/objects';
 import { checkAchievements } from '../src/core/achievements';
 import { Bot } from '../src/core/bot';
@@ -146,12 +146,17 @@ interface ShopStats {
   purchases: number;
   /** Cheapest option left after shopping, in rounds of last round's income (Infinity if none). */
   cheapestRounds: number;
+  /**
+   * Rounds of last round's income still missing for the cheapest option left, after the cash
+   * left over from shopping (Infinity if none): <= 1 means it is affordable after the next round.
+   */
+  waitRounds: number;
   /** Next Starting Size level, in rounds of last round's income. */
   sizeRounds: number;
 }
 
-function shop(s: SaveData, lastRoundCash: number): ShopStats {
-  tryMap(s);
+/** Buys the cheapest affordable option until nothing is affordable; returns how many it bought. */
+function buyAffordable(s: SaveData): number {
   let purchases = 0;
   for (let guard = 0; guard < 400; guard++) {
     const opts = options(s).filter((o) => o.cost <= s.cash).sort((a, b) => a.cost - b.cost);
@@ -161,11 +166,18 @@ function shop(s: SaveData, lastRoundCash: number): ShopStats {
     purchases++;
     if (!seen.has(o.key)) mark(o.key, `buy ${o.name} (${formatNumber(o.cost)})`);
   }
-  const left = options(s).map((o) => o.cost);
+  return purchases;
+}
+
+function shop(s: SaveData, lastRoundCash: number): ShopStats {
+  tryMap(s);
+  const purchases = buyAffordable(s);
   const inc = Math.max(1, lastRoundCash);
+  const cheapest = Math.min(Infinity, ...options(s).map((o) => o.cost));
   return {
     purchases,
-    cheapestRounds: left.length ? Math.min(...left) / inc : Infinity,
+    cheapestRounds: cheapest / inc,
+    waitRounds: (cheapest - s.cash) / inc,
     sizeRounds: eco.upgradeCost('startSize', s.upgrades.startSize, s.tier) / inc,
   };
 }
@@ -281,6 +293,8 @@ for (let run = 1; run <= RUNS; run++) {
       mark(`prestige-${run}`, `SINGULARITY #${run}: +${dm} DM after ${formatDuration(clock - row.start)} (${row.rounds} rounds)`);
       save = eco.applyPrestige(save, 0);
       buyDmTree(save);
+      // The game returns to the hub after a Singularity, so Head Start cash is spent before round 1.
+      buyAffordable(save);
       events.push(`         DM tree: ${DM_UPGRADES.map((d) => `${d.id}=${eco.dmLevel(save, d.id)}`).join(' ')}`);
       break;
     }
@@ -310,10 +324,12 @@ function report(): void {
   const gaps = play.flatMap((r) => r.levelTimes.map((t, i) => t - (i ? r.levelTimes[i - 1] : 0)));
   const spl = median(gaps);
   check('seconds per level (median)', `${fmt(spl)} s`, spl >= 4 && spl <= 8);
+  // Rounds start with SIZE.startXp of the first level's XP, so the first size-up only needs the
+  // rest: scale its time up to a full level before comparing it with the last one.
   const lastOverFirst = median(
     play.filter((r) => r.levelTimes.length >= 3).map((r) => {
       const lt = r.levelTimes;
-      return (lt[lt.length - 1] - lt[lt.length - 2]) / Math.max(0.5, lt[0]);
+      return (lt[lt.length - 1] - lt[lt.length - 2]) / Math.max(0.5, lt[0] / (1 - SIZE.startXp));
     }),
   );
   check('last level / first level time (median)', `${fmt(lastOverFirst, 2)}x`, lastOverFirst <= 1.5);
@@ -326,7 +342,7 @@ function report(): void {
 
   const buys = median(play.map((r) => r.purchases));
   check('purchases per shop visit (median)', fmt(buys), buys >= 1 && buys <= 3);
-  const affordable = play.filter((r) => r.purchases > 0 || r.cheapestRounds <= 1).length / Math.max(1, play.length);
+  const affordable = play.filter((r) => r.purchases > 0 || r.waitRounds <= 1).length / Math.max(1, play.length);
   check('visits with a purchase now or within 1 round', `${fmt(affordable * 100, 0)}%`, affordable >= 0.9);
   const sizeR = median(play.map((r) => r.sizeRounds));
   check('next Starting Size / last round income (median)', fmt(sizeR, 2), sizeR >= 0.3 && sizeR <= 1.5);
@@ -357,14 +373,15 @@ function report(): void {
   const off = median(runs.map((r) => r.offline));
   check('8 h offline payout, in rounds of recent income', fmt(off, 1), off >= 3 && off <= 5);
 
-  // Skill band: same saves, low- vs high-skill player, no shopping in between.
+  // Skill band: same saves, low- vs high-skill player, no shopping in between. Round cash varies a
+  // lot with the world seed, so each side averages 8 rounds.
   const band: string[] = [];
   let bandOk = snapshots.length > 0;
   for (const snap of snapshots.slice(0, 3)) {
     const avg = (s: number) => {
       let total = 0;
-      for (let i = 0; i < 4; i++) total += playRound(structuredClone(snap.save), withSkill(s), false).cash;
-      return total / 4;
+      for (let i = 0; i < 8; i++) total += playRound(structuredClone(snap.save), withSkill(s), false).cash;
+      return total / 8;
     };
     const ratio = avg(1.4) / Math.max(1, avg(0.6));
     band.push(`${snap.label} ${fmt(ratio, 2)}x`);

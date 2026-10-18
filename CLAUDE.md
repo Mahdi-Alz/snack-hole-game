@@ -17,8 +17,9 @@ Snack Hole is a hole-swallows-the-world browser game with an incremental meta-ga
 - **Rendering**: `render/` draws the current `World` with one `InstancedMesh` per prop type. Only objects flagged `dirty` get their instance rewritten each frame, so sim code that moves or changes a `WObj` sets `o.dirty = true`.
 - **Game glue**: `game.ts` is the state machine (hub, round, results). It wires save, economy, `World`, renderer, UI and audio together. The hub runs a bot-driven demo `World` behind the menus.
 - **Numbers**: economy numbers live in `src/config/balance.ts` and the prop catalogue in `src/config/objects.ts`. `core/economy.ts` holds the formulas. DESIGN.md describes them, but the config files are the source of truth.
-- **Save**: `migrate()` in `core/save.ts` merges the stored save over `defaultSave()`, so a new field only needs a default. Renamed or reshaped data needs a `SAVE_VERSION` bump (`config/balance.ts`) plus a `MIGRATIONS` entry.
+- **Save**: `migrate()` in `core/save.ts` merges the stored save over `defaultSave()`, so a new field only needs a default. It also drops non-finite or negative numbers and clamps levels to their caps (`clampToGame`), so a new capped field needs a line there. Renamed or reshaped data needs a `SAVE_VERSION` bump (`config/balance.ts`) plus a `MIGRATIONS` entry.
 - **Dev-only code**: the debug panel (dynamic import), `window.game` and `src/dev/` sit behind `import.meta.env.DEV`, so release builds drop them.
+- **PWA**: `vite.config.ts` writes `dist/sw.js` from `src/service-worker.js` with the precache list and versioned cache names. Only release builds register it (`src/pwa.ts`); the dev server unregisters any worker a local release build (`npm run play`, `npm run preview`) left on the same origin.
 
 ## Testing
 

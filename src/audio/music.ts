@@ -1,7 +1,9 @@
 /**
  * Background music: one CC0 track per map (see CREDITS.md), streamed from public/music/,
- * decoded once, looped without gaps and cross-faded when the map changes. Everything goes into
- * the `out` bus the Audio class owns (volume, mute, hub/pause ducking).
+ * looped without gaps and cross-faded when the map changes. Everything goes into the `out` bus
+ * the Audio class owns (volume, mute, hub/pause ducking). Only the compressed files stay cached
+ * (about 5.5 MB for all maps); just the playing track is kept decoded, since decoded PCM is ~10x
+ * bigger and would add up to well over 100 MB on mobile.
  */
 
 const TRACKS: Record<string, string> = {
@@ -46,7 +48,10 @@ function audibleRange(buf: AudioBuffer): { start: number; end: number } {
 }
 
 export class Music {
-  private cache = new Map<string, Promise<Track | null>>();
+  /** Compressed track bytes per style; a failed download is dropped so the next visit retries. */
+  private files = new Map<string, Promise<ArrayBuffer>>();
+  /** The decoded track for the current style. */
+  private decoded: { style: string; track: Promise<Track | null> } | null = null;
   private current: Playing | null = null;
   private style = '';
 
@@ -55,18 +60,32 @@ export class Music {
     private out: GainNode,
   ) {}
 
-  private load(style: string): Promise<Track | null> {
-    let p = this.cache.get(style);
+  private fetchFile(style: string): Promise<ArrayBuffer> {
+    let p = this.files.get(style);
     if (!p) {
       const file = TRACKS[style] ?? TRACKS.suburb;
-      p = fetch(`${import.meta.env.BASE_URL}music/${file}`)
-        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))
-        .then((data) => this.ctx.decodeAudioData(data))
-        .then((buffer) => ({ buffer, ...audibleRange(buffer) }))
-        .catch(() => null);
-      this.cache.set(style, p);
+      p = fetch(`${import.meta.env.BASE_URL}music/${file}`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))));
+      p.catch(() => {
+        if (this.files.get(style) === p) this.files.delete(style);
+      });
+      this.files.set(style, p);
     }
     return p;
+  }
+
+  private load(style: string): Promise<Track | null> {
+    if (this.decoded?.style !== style) {
+      const track = this.fetchFile(style)
+        // decodeAudioData detaches the buffer it is given, so decode a copy and keep the original.
+        .then((data) => this.ctx.decodeAudioData(data.slice(0)))
+        .then((buffer) => ({ buffer, ...audibleRange(buffer) }))
+        .catch(() => {
+          if (this.decoded?.track === track) this.decoded = null;
+          return null;
+        });
+      this.decoded = { style, track };
+    }
+    return this.decoded.track;
   }
 
   /** Switches to the map's track (cross-fade); a no-op if it is already playing. */
@@ -75,7 +94,11 @@ export class Music {
     this.style = style;
     void this.load(style).then((track) => {
       // Ignore a track that finished loading after the player moved on to another map.
-      if (!track || this.style !== style) return;
+      if (!track || this.style !== style) {
+        // Failed: forget the style so the next setSong (map change, music toggle) retries.
+        if (!track && this.style === style) this.style = '';
+        return;
+      }
       const ctx = this.ctx;
       const t = ctx.currentTime;
       this.fadeOut(t);
@@ -91,6 +114,13 @@ export class Music {
       src.start(t, track.start);
       this.current = { src, gain };
     });
+  }
+
+  /** Fades the music out and releases the decoded track (music turned off or muted). */
+  stop(): void {
+    this.style = '';
+    this.decoded = null;
+    this.fadeOut(this.ctx.currentTime);
   }
 
   private fadeOut(t: number): void {

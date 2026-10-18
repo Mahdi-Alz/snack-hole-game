@@ -46,26 +46,6 @@ export function geomBulkCost(base: number, growth: number, level: number, n: num
   return (base * Math.pow(growth, level) * (Math.pow(growth, n) - 1)) / (growth - 1);
 }
 
-/** How many levels can be bought with `cash`, capped by `maxLevels`. */
-export function geomMaxAffordable(
-  base: number,
-  growth: number,
-  level: number,
-  cash: number,
-  maxLevels = Infinity,
-): number {
-  if (maxLevels <= 0) return 0;
-  const first = geomCost(base, growth, level);
-  if (cash < first) return 0;
-  let n: number;
-  if (growth === 1) n = Math.floor(cash / base);
-  else n = Math.floor(Math.log(1 + (cash * (growth - 1)) / first) / Math.log(growth));
-  n = Math.min(Math.max(n, 0), maxLevels);
-  // Guard against floating point drift at the boundary.
-  while (n > 0 && geomBulkCost(base, growth, level, n) > cash * (1 + 1e-9)) n--;
-  return n;
-}
-
 // ---------------------------------------------------------------- lookups
 
 export const upgradeDef = (id: UpgradeId): UpgradeDef => UPGRADES.find((u) => u.id === id)!;
@@ -395,9 +375,17 @@ export interface RoundConfig {
   abilities: Record<AbilityId, AbilityConfig>;
 }
 
-/** Starting size level on a map: upgrades minus that map's size offset and the Singularity tier. */
+/**
+ * Size levels a Singularity tier takes off every map: one per tier up to `tierSizeCap`. Past the
+ * cap tiers only scale payouts, prices and Dark Matter, so map goals stay reachable at any tier.
+ */
+export function tierSizePenalty(tier: number): number {
+  return Math.min(tier, PRESTIGE.tierSizeCap);
+}
+
+/** Starting size level on a map: upgrades minus that map's size offset and the tier's size penalty. */
 export function startLevel(save: SaveData, mapId: MapId = save.selectedMap): number {
-  return Math.max(0, save.upgrades.startSize + dmLevel(save, 'denseCore') - mapDef(mapId).sizeOffset - save.tier);
+  return Math.max(0, save.upgrades.startSize + dmLevel(save, 'denseCore') - mapDef(mapId).sizeOffset - tierSizePenalty(save.tier));
 }
 
 export function roundTimeFor(save: SaveData): number {

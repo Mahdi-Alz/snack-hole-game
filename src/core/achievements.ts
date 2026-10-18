@@ -61,8 +61,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'tier10', name: 'End of Everything', desc: 'Reach Singularity tier 10.', icon: '🕳️', check: (s) => s.tier >= 10, skin: 'quasar' },
 ];
 
-/** Grants any newly met achievements; returns them so the UI can celebrate. */
+const KNOWN = new Set(ACHIEVEMENTS.map((a) => a.id));
+
+/**
+ * Grants any newly met achievements; returns them so the UI can celebrate. Unknown ids (from an
+ * edited or imported save) are dropped first, since each entry pays +2% cash.
+ */
 export function checkAchievements(save: SaveData): AchievementDef[] {
+  if (save.achievements.some((id) => !KNOWN.has(id))) save.achievements = save.achievements.filter((id) => KNOWN.has(id));
   const got: AchievementDef[] = [];
   for (const a of ACHIEVEMENTS) {
     if (save.achievements.includes(a.id)) continue;

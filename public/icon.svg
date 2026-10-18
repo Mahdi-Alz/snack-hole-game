@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App icon: full-bleed background, hole inside the maskable safe zone (radius 205). -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#5a36ad"/>
+      <stop offset="1" stop-color="#1a1033"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0.62" stop-color="#b48cff" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#b48cff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="pit" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#05020d"/>
+      <stop offset="0.75" stop-color="#120a24"/>
+      <stop offset="1" stop-color="#2a1660"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="200" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="152" fill="#e5d6ff"/>
+  <circle cx="256" cy="256" r="140" fill="#b48cff"/>
+  <circle cx="256" cy="256" r="122" fill="url(#pit)"/>
+  <g fill="none" stroke="#6a3df0" stroke-width="10" stroke-linecap="round" opacity="0.8">
+    <path d="M256 166 A90 90 0 0 1 346 256"/>
+    <path d="M256 346 A90 90 0 0 1 166 256"/>
+    <path d="M256 206 A50 50 0 0 1 306 256" opacity="0.7"/>
+    <path d="M256 306 A50 50 0 0 1 206 256" opacity="0.7"/>
+  </g>
+</svg>

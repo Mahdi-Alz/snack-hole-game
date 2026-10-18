@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CASH_VALUE, COMBO, HEAD_START_BASE, MAPS, OFFLINE, PRESTIGE, ROUND, ROUND_END, UPGRADES } from '../src/config/balance';
+import { CASH_VALUE, COMBO, DM_UPGRADES, HEAD_START_BASE, MAPS, OFFLINE, PRESTIGE, ROUND, ROUND_END, UPGRADES } from '../src/config/balance';
 import {
   applyPrestige,
   buildRoundConfig,
@@ -13,7 +13,6 @@ import {
   earn,
   geomBulkCost,
   geomCost,
-  geomMaxAffordable,
   levelToEat,
   lifetimeForDm,
   mapLockReason,
@@ -38,14 +37,6 @@ describe('cost curves', () => {
     expect(geomBulkCost(12, 1.52, 3, 10)).toBeCloseTo(sum, 6);
   });
 
-  it('max affordable never overspends and is maximal', () => {
-    for (const cash of [0, 11, 12, 100, 12345, 1e9]) {
-      const n = geomMaxAffordable(12, 1.52, 2, cash);
-      expect(geomBulkCost(12, 1.52, 2, n)).toBeLessThanOrEqual(cash + 1e-6);
-      expect(geomBulkCost(12, 1.52, 2, n + 1)).toBeGreaterThan(cash);
-    }
-    expect(geomMaxAffordable(10, 1.2, 0, 1e12, 5)).toBe(5);
-  });
 });
 
 describe('upgrades', () => {
@@ -161,6 +152,30 @@ describe('maps', () => {
     expect(buildRoundConfig(s, last.id).startLevel).toBe(40 - last.sizeOffset - 2);
     s.upgrades.startSize = 0;
     expect(buildRoundConfig(s, last.id).startLevel).toBe(0);
+  });
+
+  it('high tiers stay playable: the size a tier takes away is capped, prices and payouts keep scaling', () => {
+    // A 100 s round grows the hole ~15-20 sizes (DESIGN.md, Pacing).
+    const levelsPerRound = 15;
+    const maxedAt = (tier: number) => {
+      const s = defaultSave(0);
+      s.stats.rounds = 1;
+      s.upgrades.startSize = UPGRADES.find((u) => u.id === 'startSize')!.max;
+      s.dmUpgrades.denseCore = DM_UPGRADES.find((d) => d.id === 'denseCore')!.max;
+      s.tier = tier;
+      return s;
+    };
+    const capped = maxedAt(PRESTIGE.tierSizeCap);
+    const high = maxedAt(50);
+    for (const m of MAPS) {
+      const atCap = buildRoundConfig(capped, m.id);
+      const at50 = buildRoundConfig(high, m.id);
+      expect(at50.startLevel).toBe(atCap.startLevel);
+      expect(at50.startLevel).toBeGreaterThan(0);
+      expect(m.goal - at50.startLevel).toBeLessThanOrEqual(levelsPerRound);
+      expect(at50.mapMul / atCap.mapMul / PRESTIGE.tierScale ** (50 - PRESTIGE.tierSizeCap)).toBeCloseTo(1);
+    }
+    expect(upgradeCost('startSize', 30, 50) / upgradeCost('startSize', 30, PRESTIGE.tierSizeCap) / PRESTIGE.tierScale ** (50 - PRESTIGE.tierSizeCap)).toBeCloseTo(1);
   });
 });
 

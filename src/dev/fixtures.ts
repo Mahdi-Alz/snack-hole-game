@@ -10,7 +10,7 @@ const FIXTURES: Record<string, (s: SaveData) => void> = {
     s.lifetimeCash = 8e8;
     s.dm = 12;
     s.dmTotal = 20;
-    s.dmClaimed = 10;
+    s.dmClaimed = 7;
     s.stats.prestiges = 1;
     s.helpers = 3;
     s.helperLevel = 6;

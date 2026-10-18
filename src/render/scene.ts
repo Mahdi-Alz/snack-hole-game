@@ -1,15 +1,22 @@
 import * as THREE from 'three';
 import type { SkinDef } from '../config/balance';
+import type { Quality } from '../core/save';
 import type { MapData } from '../core/mapgen/builder';
 import { ALIVE, type World } from '../core/world';
 import { DashTrail } from './dashTrail';
 import { Ground } from './ground';
 import { HoleView } from './holeView';
 import { MAX_HOLES, holeUniforms } from './materials';
+import { reducedMotion } from './motion';
 import { ObjectsView } from './objectsView';
 import { Particles } from './particles';
 
 export type CameraMode = 'round' | 'hub';
+
+/** Auto quality: frames slower than this (s) for SLOW_FOR seconds step the pixel ratio down. */
+const SLOW_FRAME = 1 / 40;
+const SLOW_FOR = 3;
+const MIN_PIXEL_RATIO = 1;
 
 const HELPER_SKIN: SkinDef = {
   id: 'helper',
@@ -50,13 +57,20 @@ export class GameRenderer {
   private time = 0;
   private shadowsOn = true;
   private sunOffset = new THREE.Vector3(-45, 80, 35);
+  private scratch = new THREE.Vector3();
+  private quality: Quality = 'auto';
+  /** Pixel ratio cap from auto quality (steps down while frames run slow). */
+  private autoRatio = 2;
+  private slowFor = 0;
+  private avgFrame = 1 / 60;
+  private dpr = window.devicePixelRatio;
   /** Smoothed CPU time spent syncing instance matrices (ms). */
   syncMs = 0;
 
   constructor(canvas: HTMLCanvasElement, skin: SkinDef) {
     this.skin = skin;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(this.pixelRatio());
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -78,6 +92,51 @@ export class GameRenderer {
     this.beam.renderOrder = 4;
     this.scene.add(this.beam);
     this.resize();
+    // The canvas fills its CSS box; size the drawing buffer from that box, so the picture never
+    // stretches when a mobile browser's toolbar changes the visible height.
+    new ResizeObserver(() => this.resize()).observe(canvas);
+  }
+
+  /** Render resolution: high = up to 2x, low = 1x with smaller shadow maps, auto adapts. */
+  setQuality(q: Quality): void {
+    if (q === this.quality) return;
+    this.quality = q;
+    this.autoRatio = 2;
+    this.slowFor = 0;
+    const size = q === 'low' ? 1024 : 2048;
+    if (this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    this.resize();
+  }
+
+  /**
+   * Called once per frame with the real frame time. Auto quality lowers the pixel ratio a step at
+   * a time while frames stay slow; it also picks up a new devicePixelRatio (window moved to
+   * another screen).
+   */
+  noteFrame(dt: number): void {
+    if (window.devicePixelRatio !== this.dpr) {
+      this.dpr = window.devicePixelRatio;
+      this.resize();
+    }
+    if (this.quality !== 'auto' || dt <= 0 || dt >= 0.09) return;
+    this.avgFrame += (dt - this.avgFrame) * 0.1;
+    this.slowFor = this.avgFrame > SLOW_FRAME ? this.slowFor + dt : 0;
+    if (this.slowFor < SLOW_FOR || this.pixelRatio() <= MIN_PIXEL_RATIO) return;
+    this.autoRatio = Math.max(MIN_PIXEL_RATIO, this.pixelRatio() - 0.25);
+    this.slowFor = 0;
+    this.avgFrame = 1 / 60;
+    this.resize();
+  }
+
+  private pixelRatio(): number {
+    const max = Math.min(window.devicePixelRatio, 2);
+    if (this.quality === 'low') return Math.min(max, 1);
+    if (this.quality === 'auto') return Math.min(max, this.autoRatio);
+    return max;
   }
 
   get mapData(): MapData | null {
@@ -172,19 +231,23 @@ export class GameRenderer {
   }
 
   resize(): void {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const canvas = this.renderer.domElement;
+    const w = canvas.clientWidth || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    const ratio = this.pixelRatio();
+    this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.particles.setViewportHeight(h * Math.min(window.devicePixelRatio, 2));
+    this.particles.setViewportHeight(h * ratio);
   }
 
   /** Screen position (CSS px) of a world point, or null when behind the camera. */
   project(x: number, y: number, z: number): { x: number; y: number } | null {
-    const v = new THREE.Vector3(x, y, z).project(this.camera);
+    const v = this.scratch.set(x, y, z).project(this.camera);
     if (v.z > 1) return null;
-    return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+    const canvas = this.renderer.domElement;
+    return { x: (v.x * 0.5 + 0.5) * canvas.clientWidth, y: (-v.y * 0.5 + 0.5) * canvas.clientHeight };
   }
 
   render(dt: number, world: World | null, mode: CameraMode): void {
@@ -297,7 +360,7 @@ export class GameRenderer {
     this.camera.lookAt(t.x + sx, 0, t.z + sz);
     const dashing = world.abilities.dash.active > 0 && world.running;
     this.fovKick += ((dashing ? 1 : 0) - this.fovKick) * (1 - Math.exp(-(dashing ? 14 : 4) * dt));
-    this.camera.fov = 45 + 8 * this.fovKick;
+    this.camera.fov = 45 + (reducedMotion() ? 0 : 8) * this.fovKick;
     this.camera.near = Math.max(0.3, d * 0.03);
     this.camera.far = d * 8 + 300;
     this.camera.updateProjectionMatrix();

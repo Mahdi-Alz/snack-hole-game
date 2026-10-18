@@ -33,9 +33,10 @@ export class Hub {
     this.cash = h('div', { class: 'top-cash' });
     this.rate = h('div', { class: 'top-rate' });
     this.dm = h('div', { class: 'top-dm' });
-    const settings = h('button', { class: 'icon-btn', title: 'Settings', onclick: () => this.onSettings?.() }, '⚙️');
-    this.tabBar = h('div', { class: 'tab-bar' });
-    this.content = h('div', { class: 'tab-content' });
+    const settings = h('button', { class: 'icon-btn', title: 'Settings', 'aria-label': 'Settings', onclick: () => this.onSettings?.() }, '⚙️');
+    this.tabBar = h('div', { class: 'tab-bar', role: 'tablist', 'aria-label': 'Shop' });
+    // Focusable as a fallback target, so focus never drops to <body> when the panel rebuilds.
+    this.content = h('div', { class: 'tab-content', role: 'tabpanel', tabindex: '-1' });
     this.playMap = h('div', { class: 'play-map' });
     this.playInfo = h('div', { class: 'play-info' });
     this.playBtn = h('button', { class: 'play-btn', onclick: () => this.onPlay?.() }, h('span', { class: 'play-icon' }, '▶'), 'PLAY');
@@ -74,8 +75,16 @@ export class Hub {
     this.dirty = true;
   }
 
+  /**
+   * Rebuilding replaces every button. Focus moves to the same tab or the same position in the
+   * panel afterwards; otherwise it would drop to <body>, where Enter / Space start a round.
+   */
   private rebuild(): void {
     const s = this.api.save;
+    const focused = document.activeElement;
+    const focusTab = focused instanceof HTMLElement && this.tabBar.contains(focused) ? focused.dataset.tab : undefined;
+    const panelButtons = () => [...this.content.querySelectorAll<HTMLElement>('button, select, input')];
+    const focusIndex = focused instanceof HTMLElement && this.content.contains(focused) ? panelButtons().indexOf(focused) : -2;
     this.tabBar.innerHTML = '';
     this.tabButtons.clear();
     const visible = TABS.filter((t) => t.visible(s));
@@ -86,7 +95,15 @@ export class Hub {
       const isNew = !s.flags[`tab_${t.id}`];
       const b = h(
         'button',
-        { class: `tab-btn ${t.id === this.tab ? 'on' : ''}`, title: t.name, onclick: () => this.selectTab(t.id) },
+        {
+          class: `tab-btn ${t.id === this.tab ? 'on' : ''}`,
+          title: t.name,
+          role: 'tab',
+          'aria-label': isNew ? `${t.name} (new)` : t.name,
+          'aria-selected': String(t.id === this.tab),
+          'data-tab': t.id,
+          onclick: () => this.selectTab(t.id),
+        },
         h('span', { class: 'tab-icon' }, t.icon),
         h('span', { class: 'tab-name' }, t.name),
         isNew ? h('span', { class: 'tab-new' }, 'NEW') : null,
@@ -100,6 +117,11 @@ export class Hub {
     this.content.appendChild(renderTab(this.tab, this.api, this.cards));
     this.content.scrollTop = scroll;
     this.dirty = false;
+    if (focusTab) (this.tabButtons.get(focusTab as TabId) ?? this.tabButtons.get(this.tab))?.focus({ preventScroll: true });
+    else if (focusIndex >= -1) {
+      const items = panelButtons();
+      (items[Math.min(Math.max(0, focusIndex), items.length - 1)] ?? this.content).focus({ preventScroll: true });
+    }
   }
 
   /** Keeps tab visibility in sync as cash crosses unlock thresholds. */

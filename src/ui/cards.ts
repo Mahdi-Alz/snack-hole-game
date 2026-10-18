@@ -62,11 +62,16 @@ export function card(spec: CardSpec): Card {
       done.style.display = d ? '' : 'none';
       if (d) setText(done, d);
       else {
-        setText(btnLabel, spec.button.label());
-        setText(btnCost, spec.button.cost());
+        const label = spec.button.label();
+        const cost = spec.button.cost();
+        setText(btnLabel, label);
+        setText(btnCost, cost);
         const can = spec.button.can();
         toggleClass(btn, 'can', can);
         toggleClass(el, 'affordable', can);
+        // The visible label is just "+1 $1.2K"; screen readers also get the item and affordability.
+        const name = `${spec.title}: ${label} for ${cost}${can ? '' : ' (not enough yet)'}`;
+        if (btn.getAttribute('aria-label') !== name) btn.setAttribute('aria-label', name);
       }
     } else done.style.display = 'none';
   };

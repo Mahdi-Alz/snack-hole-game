@@ -1,14 +1,21 @@
 import {
   ABILITIES,
   DM_UPGRADES,
+  HELPERS,
   MAPS,
+  OFFLINE,
   SAVE_VERSION,
+  SKINS,
   UPGRADES,
   type AbilityId,
   type DmUpgradeId,
   type MapId,
   type UpgradeId,
 } from '../config/balance';
+import { OBJECT_TYPES } from '../config/objects';
+
+/** Render resolution: `auto` steps the pixel ratio down while frames run slow. */
+export type Quality = 'auto' | 'high' | 'low';
 
 export interface Settings {
   volume: number;
@@ -21,6 +28,7 @@ export interface Settings {
   shadows: boolean;
   shake: boolean;
   floaters: boolean;
+  quality: Quality;
 }
 
 export interface Stats {
@@ -70,6 +78,11 @@ export interface SaveData {
   flags: Record<string, boolean>;
   stats: Stats;
   settings: Settings;
+  /**
+   * Cash eaten in a round that was still running at the last save. Credited on the next start,
+   * so closing the tab (or the phone killing it) mid-round keeps what you ate.
+   */
+  pendingRoundCash: number;
   lastSeen: number;
   created: number;
 }
@@ -127,7 +140,9 @@ export function defaultSave(now = Date.now()): SaveData {
       shadows: true,
       shake: true,
       floaters: true,
+      quality: 'auto',
     },
+    pendingRoundCash: 0,
     lastSeen: now,
     created: now,
   };
@@ -137,18 +152,56 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Deep-merge loaded data onto defaults so new fields get sane values and bad types are dropped. */
+/**
+ * Deep-merge loaded data onto defaults so new fields get sane values and bad types are dropped.
+ * Every number in a save is a finite count, amount or timestamp, so anything else (NaN, Infinity,
+ * negatives) falls back to the default. Only the default's own keys are copied, so inherited names
+ * like `constructor` or `toString` never sneak in.
+ */
 function mergeInto<T>(def: T, src: unknown): T {
   if (!isObj(def) || !isObj(src)) {
+    if (typeof def === 'number') return (typeof src === 'number' && Number.isFinite(src) && src >= 0 ? src : def) as T;
     if (typeof def === typeof src && !Array.isArray(def)) return src as T;
     if (Array.isArray(def) && Array.isArray(src)) return src as T;
     return def;
   }
   const out: Record<string, unknown> = { ...(def as Record<string, unknown>) };
   for (const [k, v] of Object.entries(src)) {
-    if (k in out) out[k] = mergeInto(out[k], v);
+    if (Object.prototype.hasOwnProperty.call(out, k)) out[k] = mergeInto(out[k], v);
   }
   return out as T;
+}
+
+const OBJECT_IDS = new Set(OBJECT_TYPES.map((o) => o.id));
+const SKIN_IDS = new Set(SKINS.map((s) => s.id));
+const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
+
+/** Whole number in [0, max]. */
+function level(v: number, max = Infinity): number {
+  return Math.min(max, Math.floor(v));
+}
+
+/** Clamps merged numbers to what the game can actually reach and drops unknown ids. */
+function clampToGame(s: SaveData): void {
+  for (const u of UPGRADES) s.upgrades[u.id] = level(s.upgrades[u.id], u.max);
+  for (const a of ABILITIES) s.abilities[a.id] = level(s.abilities[a.id], a.maxLevel);
+  for (const u of DM_UPGRADES) s.dmUpgrades[u.id] = level(s.dmUpgrades[u.id], u.max);
+  s.helpers = level(s.helpers, HELPERS.countCosts.length);
+  s.helperLevel = level(s.helperLevel, HELPERS.levelMax);
+  s.tier = level(s.tier);
+  for (const m of MAPS) {
+    s.mapBest[m.id] = Math.min(1, s.mapBest[m.id]);
+    s.mapLevel[m.id] = level(s.mapLevel[m.id]);
+  }
+  s.recentRoundCash = s.recentRoundCash.filter((c) => typeof c === 'number' && Number.isFinite(c) && c >= 0).slice(-OFFLINE.recentRounds);
+  s.skins = [...new Set(['classic', ...s.skins.filter((id) => SKIN_IDS.has(id))])];
+  if (!s.skins.includes(s.skin)) s.skin = 'classic';
+  s.achievements = [...new Set(s.achievements.filter((id) => typeof id === 'string'))];
+  if (!OBJECT_IDS.has(s.stats.biggestType)) s.stats.biggestType = '';
+  s.settings.volume = Math.min(1, s.settings.volume);
+  if (!QUALITIES.includes(s.settings.quality)) s.settings.quality = 'auto';
+  s.maps.suburb = true;
+  if (!MAPS.some((m) => m.id === s.selectedMap) || s.maps[s.selectedMap] !== true) s.selectedMap = 'suburb';
 }
 
 /** Version migrations: each step upgrades from version n to n+1. */
@@ -165,22 +218,29 @@ const MIGRATIONS: Record<number, (d: Record<string, unknown>) => void> = {
   2: (d) => {
     for (const k of Object.keys(d)) if (k !== 'settings') delete d[k];
   },
+  // 3 -> 4: the Dark Matter curve's coefficient went from 2.5 to 1.75. Scale the DM already
+  // claimed onto the new curve, so the next Singularity is as close as it was (DM held is kept).
+  3: (d) => {
+    if (typeof d.dmClaimed === 'number' && Number.isFinite(d.dmClaimed)) d.dmClaimed = Math.floor((d.dmClaimed * 1.75) / 2.5);
+  },
 };
 
 export function migrate(raw: unknown, now = Date.now()): SaveData {
   if (!isObj(raw)) return defaultSave(now);
   const data = { ...raw };
-  let v = typeof data.version === 'number' ? data.version : 0;
+  let v = typeof data.version === 'number' && Number.isFinite(data.version) ? Math.max(0, Math.floor(data.version)) : 0;
   while (v < SAVE_VERSION) {
     MIGRATIONS[v]?.(data);
     v++;
   }
   data.version = SAVE_VERSION;
   const merged = mergeInto(defaultSave(now), data);
-  // Gulpedia keys are dynamic: keep only numeric counts.
+  // Gulpedia keys are dynamic: keep only known prop types with whole, positive counts.
   const g: Record<string, number> = {};
   if (isObj(data.gulpedia)) {
-    for (const [k, c] of Object.entries(data.gulpedia)) if (typeof c === 'number' && c > 0) g[k] = c;
+    for (const [k, c] of Object.entries(data.gulpedia)) {
+      if (OBJECT_IDS.has(k) && typeof c === 'number' && Number.isFinite(c) && c >= 1) g[k] = Math.floor(c);
+    }
   }
   merged.gulpedia = g;
   const flags: Record<string, boolean> = {};
@@ -188,24 +248,46 @@ export function migrate(raw: unknown, now = Date.now()): SaveData {
     for (const [k, v] of Object.entries(data.flags)) if (v === true) flags[k] = true;
   }
   merged.flags = flags;
-  merged.maps.suburb = true;
-  if (!merged.maps[merged.selectedMap]) merged.selectedMap = 'suburb';
-  if (!merged.skins.includes(merged.skin)) merged.skin = 'classic';
-  for (const key of ['cash', 'runCash', 'lifetimeCash', 'dm', 'dmTotal', 'dmClaimed', 'tier'] as const) {
-    if (!Number.isFinite(merged[key]) || merged[key] < 0) merged[key] = 0;
-  }
+  clampToGame(merged);
   return merged;
+}
+
+/** True for parsed JSON that is a Snack Hole save (any version), not just any object. */
+export function looksLikeSave(raw: unknown): boolean {
+  return isObj(raw) && typeof raw.version === 'number';
 }
 
 export function serialize(save: SaveData): string {
   return JSON.stringify(save);
 }
 
-export function deserialize(text: string | null, now = Date.now()): SaveData {
-  if (!text) return defaultSave(now);
+/**
+ * The save in `text`, or null when it is not JSON of a save. Only unreadable text returns null: an
+ * error inside migrate() is a bug and throws, so the game stops instead of starting a fresh save.
+ */
+export function parseSave(text: string, now = Date.now()): SaveData | null {
+  let raw: unknown;
   try {
-    return migrate(JSON.parse(text), now);
+    raw = JSON.parse(text);
   } catch {
-    return defaultSave(now);
+    return null;
   }
+  return looksLikeSave(raw) ? migrate(raw, now) : null;
+}
+
+export function deserialize(text: string | null, now = Date.now()): SaveData {
+  return (text && parseSave(text, now)) || defaultSave(now);
+}
+
+/** Export format: base64 of the save's UTF-8 JSON (copy-paste safe). */
+export function encodeSaveText(json: string): string {
+  let bin = '';
+  for (const b of new TextEncoder().encode(json)) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/** Inverse of encodeSaveText; throws on text that is not base64. */
+export function decodeSaveText(text: string): string {
+  const bin = atob(text.replace(/\s+/g, ''));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }

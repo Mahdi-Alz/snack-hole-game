@@ -83,7 +83,8 @@ const cost = (n: number) => formatCash(n);
 function upgradesTab(api: HubApi, cards: Card[]): HTMLElement {
   const s = api.save;
   const root = h('div', { class: 'tab-body' });
-  if (s.stats.rounds >= 1 && Object.values(s.upgrades).every((v) => v === 0)) {
+  // First-run tip only: after a Singularity upgrades are reset, so "permanent" would be wrong.
+  if (s.stats.rounds >= 1 && s.stats.prestiges === 0 && Object.values(s.upgrades).every((v) => v === 0)) {
     root.appendChild(h('div', { class: 'tip' }, '💡 Upgrades are permanent. Buy one, then hit PLAY to go again!'));
   }
   let teaser = false;
@@ -271,7 +272,7 @@ function singularityTab(api: HubApi, cards: Card[]): HTMLElement {
       barText.textContent = `${formatCash(s.lifetimeCash)} / ${formatCash(next)} lifetime for the next DM`;
       btn.disabled = dm <= 0;
       const worth = s.dmTotal > 0 && dm >= s.dmTotal * 0.5 ? ' Good time to collapse: +50% or more.' : '';
-      const tier = s.tier > 0 || tierUpReady(s) ? ` Tier ${s.tier}${tierUpReady(s) ? ` → ${s.tier + 1} on collapse (bigger world, x${PRESTIGE.tierScale} payouts and prices, DM x${tierDmMult(s.tier + 1).toFixed(1)})` : ''}.` : '';
+      const tier = s.tier > 0 || tierUpReady(s) ? ` Tier ${s.tier}${tierUpReady(s) ? ` → ${s.tier + 1} on collapse (${s.tier < PRESTIGE.tierSizeCap ? 'bigger world, ' : ''}x${PRESTIGE.tierScale} payouts and prices, DM x${tierDmMult(s.tier + 1).toFixed(1)})` : ''}.` : '';
       info.textContent = `Resets cash, upgrades, helpers, abilities${dmLevel(s, 'wormhole') ? '' : ' and maps'}. Each DM ever earned gives +${PRESTIGE.bonusPerDm * 100}% cash forever (you have ${formatNumber(s.dmTotal)}).${headStartCash(s) > 0 ? ` Head Start gives ${formatCash(headStartCash(s))}.` : ''}${worth}${tier}`;
     },
   });

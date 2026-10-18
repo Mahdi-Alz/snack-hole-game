@@ -7,8 +7,11 @@ let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let mesh: THREE.InstancedMesh;
-const cache = new Map<number, string>();
+/** Data URLs keyed by `type:tint` (tint changes the colour of tintable parts). */
+const cache = new Map<string, string>();
 const SIZE = 96;
+const DEFAULT_TINT = 0xff6b6b;
+const key = (t: number, tint: number) => `${t}:${tint}`;
 
 function init(): void {
   const canvas = document.createElement('canvas');
@@ -26,8 +29,8 @@ function init(): void {
 }
 
 /** Data URL thumbnail of a prop type, rendered once with an offscreen renderer. */
-export function thumbFor(t: number, tint = 0xff6b6b): string {
-  const hit = cache.get(t);
+export function thumbFor(t: number, tint = DEFAULT_TINT): string {
+  const hit = cache.get(key(t, tint));
   if (hit) return hit;
   try {
     if (!renderer) init();
@@ -50,7 +53,7 @@ export function thumbFor(t: number, tint = 0xff6b6b): string {
     camera.lookAt(center);
     renderer!.render(scene, camera);
     const url = renderer!.domElement.toDataURL('image/png');
-    cache.set(t, url);
+    cache.set(key(t, tint), url);
     (mesh.material as THREE.Material).dispose();
     mesh.dispose();
     return url;
@@ -69,12 +72,12 @@ let pumping = false;
 
 /** Renders thumbnails for these types in the background, one every few frames. */
 export function prewarmThumbs(types: Iterable<number>): void {
-  for (const t of types) if (!cache.has(t) && !queue.includes(t)) queue.push(t);
+  for (const t of types) if (!cache.has(key(t, DEFAULT_TINT)) && !queue.includes(t)) queue.push(t);
   if (pumping || queue.length === 0) return;
   pumping = true;
   const step = () => {
     const t = queue.shift();
-    if (t !== undefined && !cache.has(t)) thumbFor(t);
+    if (t !== undefined && !cache.has(key(t, DEFAULT_TINT))) thumbFor(t);
     if (queue.length) setTimeout(step, 40);
     else pumping = false;
   };
@@ -83,7 +86,7 @@ export function prewarmThumbs(types: Iterable<number>): void {
 
 /** Cached thumbnail or '' (and schedules it) — never blocks a frame. */
 export function cachedThumb(t: number): string {
-  const hit = cache.get(t);
+  const hit = cache.get(key(t, DEFAULT_TINT));
   if (hit) return hit;
   prewarmThumbs([t]);
   return '';

@@ -41,7 +41,7 @@ the first upgrade is bought ~30–40 s after starting.
 
 - Radius `R(L) = 0.75 * 1.125^L`. L starts at Starting Size + Dense Core − the map's size offset −
   the Singularity tier, and every round begins with half the XP of its first level.
-- XP for L → L+1: `8 * R(L)^2 * min(1, (L + 2) / 8)`. A prop gives `f^2` XP, times
+- XP for L → L+1: `8 * R(L)^2 * min(1, (L + 2) / 6)`. A prop gives `f^2` XP, times
   `1 + 3 * (f / 0.9R)^3` for props close to the size limit. Equal exponents keep the number of
   your-size props per level constant, so growth runs at a steady ~4–6 s per level instead of
   stalling late in a round; the near-limit bonus lets sparse top tiers (a few huge landmarks)
@@ -72,13 +72,13 @@ the first upgrade is bought ~30–40 s after starting.
 
 ## Golden props, events and landmarks
 
-- **Golden props**: every prop rolls `1% + 0.6% * GoldenTouchLvl` (max 10%) to spawn golden each
+- **Golden props**: every prop rolls `1% + 1% * GoldenTouchLvl` (9% at the max level 8) to spawn golden each
   round: worth x10, drawn in gold with a moving glint and sparkles, coin ding + gold floater on
   swallow. Results show how many you ate (✨).
 - **Random events** (rounds only, not the warm-up): at round start each event rolls its chance
   (rush hour 30%, UFO 25%, stampede 35% on the farm). Hits play one at a time, the first 8–16 s in
   and the next 4–8 s after the previous ends, while ≥ 12 s remain. Measured: ~50% of rounds have
-  an event (~68% on the farm), even with the base 50 s round.
+  an event (~68% on the farm), even with the base 60 s round.
   - 🚗 Rush hour: 18 extra vehicles from the map's traffic mix enter the roads out of view.
   - 🛸 UFO fly-by: a saucer (scale 0.7, edible when big enough) crosses just beyond the hole with
     a tractor beam, dropping 10 golden copies of the map's commonest small prop.
@@ -94,8 +94,8 @@ the first upgrade is bought ~30–40 s after starting.
 
 ## Combo
 
-Swallows within the window (`1.2 s + 0.12 s * comboLvl`) of the previous one stack.
-`comboMult = min(1 + 0.02 * (stack - 1), 2 + 0.05 * comboLvl)`.
+Swallows within the window (`1.2 s + 0.15 s * comboLvl`) of the previous one stack.
+`comboMult = min(1 + 0.02 * (stack - 1), 2 + 0.15 * comboLvl)`.
 
 ## Cash upgrades (`cost = base * growth^level * 4^tier`)
 
@@ -105,7 +105,7 @@ levels a round gains, so they are priced like size upgrades.
 
 | Upgrade | Effect per level | Base | Growth | Max | Visible at (run $) |
 |---|---|---|---|---|---|
-| Starting Size | +1 start level | 40 | 1.6 | 45 | 0 |
+| Starting Size | +1 start level | 45 | 1.65 | 45 | 0 |
 | Speed | +8% speed | 60 | 4.5 | 8 | 0 |
 | Cash Value | +25% cash (linear) | 100 | 3.5 | 10 | 0 |
 | Round Time | +10 s (base 60 s, max 100 s) | 400 | 8 | 4 | 0 |
@@ -149,20 +149,21 @@ is selected). Later maps also need Singularities.
 | Happy Farm | Suburb goal | 20 | 6 | 8 | 0.81 |
 | Downtown | Farm goal | 26 | 45 | 16 | 0.62 |
 | Harbor | Downtown goal | 25 | 236 | 22 | 0.47 |
-| Airport | Harbor goal + 1 Singularity | 28 | 825 | 31 | 1 |
-| Moon Base | Airport goal + 3 Singularities | 26 | 372 | 35 | 0.81 |
+| Airport | Harbor goal + 1 Singularity | 28 | 1,000 | 31 | 1 |
+| Moon Base | Airport goal + 3 Singularities | 26 | 1,400 | 35 | 0.81 |
 
 Offsets were picked so you enter each map near the bottom of its size ladder with the Starting
 Size that cleared the previous goal, and need about 5 more levels to reach its goal (5–8 rounds
 on a first visit). Value multipliers make a new map's first rounds pay ~1.75x the previous map's
-last ones (Moon's is lower than Airport's because its props are worth more on their own). Goals
+last ones (Airport and Moon were raised to 1,000 and 1,400 because their first rounds paid less
+than the previous map's last ones). Goals
 sit just below each map's lone top landmark: a goal on a single prop is a cliff. Every map tracks
 its best %; reaching 100% gives a permanent +25% cash (kept through prestige).
 
 ## Singularity (prestige)
 
 - Available once Downtown is unlocked in the run.
-- Dark Matter comes from lifetime cash: `DM total = floor(2.5 * (lifetimeCash / 1e6)^0.25)`, and a
+- Dark Matter comes from lifetime cash: `DM total = floor(1.75 * (lifetimeCash / 1e6)^0.25)`, and a
   Singularity pays what has not been claimed yet. Doubling DM needs ~16x the cash, and collapsing
   again at the same point pays nothing, so runs must push further. The panel shows the gain, its
   % of the DM you hold, the income multiplier after reset, and a hint once the gain is +50%.
@@ -173,9 +174,12 @@ its best %; reaching 100% gives a permanent +25% cash (kept through prestige).
   (start with $300 × 10^(lvl−1)), Quantum Helpers (+10% helper radius and speed), Gravity Well
   (+1 magnet level), Hawking Radiation (+2 h offline cap), Wormhole (keep maps, 40 DM).
 - **Endless tiers.** A Singularity after a run that reached the Moon Base goal raises the tier:
-  every map starts 1 size smaller per tier, map payouts and all cash prices scale x4 per tier,
-  and DM gains are x(1 + 0.5 × tier). Tiers 1, 3, 5 and 10 unlock skins (trophies).
-- Skins (rim colour + swirl pattern: spiral, rings, stars, galaxy, void) cost 3–30 DM or come
+  every map starts 1 size smaller per tier up to 10 sizes (tier 10), map payouts and all cash
+  prices scale x4 per tier, and DM gains are x(1 + 0.1 × tier). Past tier 10 a tier only scales
+  the numbers, so with maxed Starting Size and Dense Core Moon Base still starts 15 sizes below its
+  goal (uncapped it would start at size 1 from about tier 20). Tiers 1, 3, 5 and 10 unlock skins
+  (trophies).
+- Skins (rim colour + swirl pattern: spiral, rings, stars, galaxy or none) cost 3–30 DM or come
   from trophies.
 
 ## Offline earnings
@@ -195,29 +199,37 @@ Singularity (recent income starts low again). Time with the tab hidden counts th
 ## Pacing (from `npm run sim -- --runs 6 --human --report`)
 
 `npm run sim` plays real rounds with a greedy bot (same World + map generators) that shops
-cheapest-first and collapses once the DM gain is +50% of what it holds and progress has stalled
-(the next map needs a Singularity, or 4 rounds without a better size). `--human` = slower
-re-targeting, 80% stick input, rare ability use and 20 s per shop visit. `--report` checks the
-pacing targets (PASS/FAIL), `--trace` prints each round's level-up times, `--seed` changes the
-world seeds.
+cheapest-first (Head Start cash before a run's first round) and collapses once the DM gain is
++50% of what it holds and progress has stalled (the next map needs a Singularity, or 4 rounds
+without a better size). `--human` = slower re-targeting, 80% stick input, rare ability use and
+20 s per shop visit. `--report` checks the pacing targets (PASS/FAIL), `--trace` prints each
+round's level-up times, `--seed` changes the world seeds.
 
 | Event (human model) | Time |
 |---|---|
 | Growth Rate, Magnet | 3:20 |
 | Happy Farm, first helper | 7:40 |
-| Downtown | 17:40 |
-| Harbor | 29:09 |
-| first Singularity (+11 DM) | 38:38 |
-| Airport (run 2) | 54:06 |
-| Moon Base (run 4) | 1h 50m |
-| first tier (run 4 collapse) | 2h 34m |
+| Downtown | 19:40 |
+| Harbor | 33:20 |
+| first Singularity (+7 DM) | 43:17 |
+| Airport (run 2) | 1h 04m |
+| Moon Base (run 4) | 2h 11m |
+| first tier (run 4 collapse) | 2h 27m |
 
-Targets met in the latest report: first size-up ≤ 5 s (3.5 s), 4–8 s per level (4.3 s), no dead
-time, 1–3 purchases per shop visit (2), Starting Size costing 0.3–1.5 rounds (0.93), 5–8 rounds
-per map in run 1 (6, 6, 6), run 2 back to Harbor in 40% of run 1's time, DM per run growing at
-most x2 (11, 9, 10, 15, 24, 46), 8 h offline = 4 rounds, skill band 1.7–1.9x. Near misses: first
-Singularity at 38 min (target 40–60), all maps at 1h 50m (target 2–3 h), the first Moon run is
-long (~35 rounds) because Moon's goal is sensitive to the player's growth rate.
+Targets met in the latest report (13/17): first size-up ≤ 5 s (3.4 s), 4–8 s per level (4.1 s),
+last level ≤ 1.5x the first (0.92x; the first size-up is scaled to a full level's XP), no dead
+time, 1–3 purchases per shop visit (3), 93% of visits buy something or can after one more round
+(counting cash left over), Starting Size costing 0.3–1.5 rounds (0.50), 5–8 rounds per map in
+run 1 (6, 7, 7), first Singularity at 43 min, run 2 back to Harbor in 47% of run 1's time, DM per
+run growing at most x2 (7, 5, 6, 9, 15, 28), all maps at 2h 11m, 8 h offline = 4 rounds.
+`--seed 2` gives the same 13. Misses: radius growth per round 6.6x (target 3–5x, which needs
+7+ s per level in a 100 s round, and Downtown/Harbor goals sit 16–20 sizes above their entry
+level); cheapest option left 0.43 rounds of income (target 1–3: run 1 income doubles every round
+across ~10 open tracks and later runs buy 10–30 levels per visit on the early maps); run 3
+reaches the Airport in 91% of run 2's time (target 25–55%: each run adds only ~+50% DM, about
+1.3x income, and both runs clear the early maps at about one round per map); skill band
+1.15–1.77x (target 1.5–3: a 1.4-skill bot gains only 0.5–2 more sizes per round than a 0.6-skill
+one, so the band is mostly round-to-round noise).
 
 ## Architecture
 
@@ -234,16 +246,24 @@ src/
     bot.ts         greedy steering (sim + hub attract mode)
     spatial.ts     uniform hash grid
     achievements.ts
-  render/      three.js: scene/camera, ground decal mesh + hole cut shader, hole view,
-               procedural prop geometry, instanced objects, particles, thumbnails
-  ui/          HTML overlay: hud, hub + tabs, cards, dialogs, toasts, debug panel, input
+  render/      three.js: scene/camera (resolution follows the canvas box; Auto quality lowers the
+               pixel ratio while frames run slow), ground decal mesh + hole cut shader, hole
+               view, procedural prop geometry, instanced objects, particles, thumbnails,
+               motion.ts (prefers-reduced-motion)
+  ui/          HTML overlay: hud, hub + tabs, cards, dialogs (focus trap, Esc), toasts, debug
+               panel, input (mouse, touch, keys by KeyboardEvent.code, gamepad), fatal.ts
+               (error screen)
   audio/       WebAudio synth (gulps, mallet/bell chimes, countdown, fanfare, ambient beds with
                wind/surf swells, birds on the farm and suburb, gulls at the harbor) and
                music.ts: one CC0 track per map from public/music/ (CREDITS.md), looped
                gaplessly, cross-faded on map change, quieter in the hub, ducked while paused
   dev/         dev-only URL testing flags (?mute, ?fresh, ?save=NAME, ?seed=N) and fixture saves
-  game.ts      state machine (hub → round → results), autosave, offline, purchases
-tests/         vitest: format, economy, world/mapgen/save, map size ladders
+  game.ts      state machine (hub → round → results), autosave (with the running round's cash),
+               offline, purchases, import / backup / restore, one saving tab, crash guard
+  pwa.ts       service worker registration (release builds); service-worker.js is the template
+               vite.config.ts turns into dist/sw.js
+tests/         vitest: format, economy, shop (helpers, abilities, trophies, offline edges), save
+               validation, world/mapgen, map size ladders
 scripts/       sim.ts (balance), smoke.mjs / shots.mjs / ui-shots.mjs (Playwright screenshots),
                devServer.mjs (each script starts its own Vite unless given a URL)
 ```

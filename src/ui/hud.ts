@@ -50,13 +50,17 @@ export class Hud {
       e.preventDefault();
       this.onPause?.();
     });
+    // Keyboard activation (Enter / Space on the focused button) arrives as a click with no pointer.
+    pauseBtn.addEventListener('click', (e) => {
+      if (e.detail === 0) this.onPause?.();
+    });
     this.comboText = h('div', { class: 'combo-text' });
     this.comboMult = h('div', { class: 'combo-mult' });
     this.comboBar = h('div', { class: 'combo-bar-fill' });
     this.combo = h('div', { class: 'hud-combo' }, this.comboText, this.comboMult, h('div', { class: 'combo-bar' }, this.comboBar));
     this.abilityBar = h('div', { class: 'hud-abilities' });
     this.floaterLayer = h('div', { class: 'floaters' });
-    this.bannerEl = h('div', { class: 'banner' });
+    this.bannerEl = h('div', { class: 'banner', role: 'status', 'aria-live': 'polite' });
     this.hintEl = h('div', { class: 'hud-hint hidden' });
     this.root = h(
       'div',
@@ -89,11 +93,14 @@ export class Hud {
       if (world.cfg.abilities[a.id].level <= 0) continue;
       const cd = h('div', { class: 'ab-cd' });
       const label = h('div', { class: 'ab-key' }, a.key.split(' / ').pop()!);
-      const el = h('button', { class: 'ab-btn', title: `${a.name} (${a.key})` }, h('div', { class: 'ab-icon' }, a.icon), cd, label);
+      const el = h('button', { class: 'ab-btn', title: `${a.name} (${a.key})`, 'aria-label': `${a.name} (${a.key})` }, h('div', { class: 'ab-icon', 'aria-hidden': 'true' }, a.icon), cd, label);
       el.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
         e.preventDefault();
         this.onAbility?.(a.id);
+      });
+      el.addEventListener('click', (e) => {
+        if (e.detail === 0) this.onAbility?.(a.id);
       });
       this.abilityBar.appendChild(el);
       this.abilities.push({ id: a.id, el, cd, label });

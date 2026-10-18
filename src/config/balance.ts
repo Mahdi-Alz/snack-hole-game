@@ -16,7 +16,7 @@ export const SIZE = {
   xpExp: 2,
   objXpExp: 2,
   rampStart: 2,
-  rampLevels: 8,
+  rampLevels: 6,
   /** Fraction of the first level's XP the hole starts each round with. */
   startXp: 0.5,
   /**
@@ -107,7 +107,7 @@ export interface UpgradeDef {
  * geometrically (base * growth^level) and no track has milestone multipliers.
  */
 export const UPGRADES: UpgradeDef[] = [
-  { id: 'startSize', name: 'Starting Size', icon: '⭕', desc: 'Begin each round one size bigger.', base: 40, growth: 1.6, max: 45, unlockAt: 0 },
+  { id: 'startSize', name: 'Starting Size', icon: '⭕', desc: 'Begin each round one size bigger.', base: 45, growth: 1.65, max: 45, unlockAt: 0 },
   { id: 'speed', name: 'Speed', icon: '💨', desc: 'Glide around the map 8% faster.', base: 60, growth: 4.5, max: 8, unlockAt: 0 },
   { id: 'cashValue', name: 'Cash Value', icon: '💰', desc: 'Everything you eat is worth 25% more.', base: 100, growth: 3.5, max: 10, unlockAt: 0 },
   { id: 'roundTime', name: 'Round Time', icon: '⏱️', desc: '+10 seconds per round.', base: 400, growth: 8, max: 4, unlockAt: 0 },
@@ -228,8 +228,8 @@ export const MAPS: MapDef[] = [
   { id: 'farm', name: 'Happy Farm', icon: '🚜', blurb: 'Barns, fields and lots of animals.', goal: 19, needsSingularities: 0, valueMul: 6, sizeOffset: 8, xpMul: 0.81, seed: 3303 },
   { id: 'downtown', name: 'Downtown', icon: '🏙️', blurb: 'Busy avenues and towering skyscrapers.', goal: 25, needsSingularities: 0, valueMul: 45, sizeOffset: 16, xpMul: 0.62, seed: 2202 },
   { id: 'harbor', name: 'Harbor', icon: '⚓', blurb: 'Containers, cranes and giant ships.', goal: 24, needsSingularities: 0, valueMul: 236, sizeOffset: 22, xpMul: 0.47, seed: 4404 },
-  { id: 'airport', name: 'Airport', icon: '✈️', blurb: 'Jets, hangars and a huge terminal.', goal: 27, needsSingularities: 1, valueMul: 825, sizeOffset: 31, xpMul: 1, seed: 5505 },
-  { id: 'moon', name: 'Moon Base', icon: '🌙', blurb: 'Low gravity, big domes, suspicious cheese.', goal: 25, needsSingularities: 3, valueMul: 372, sizeOffset: 35, xpMul: 0.81, seed: 6606 },
+  { id: 'airport', name: 'Airport', icon: '✈️', blurb: 'Jets, hangars and a huge terminal.', goal: 27, needsSingularities: 1, valueMul: 1000, sizeOffset: 31, xpMul: 1, seed: 5505 },
+  { id: 'moon', name: 'Moon Base', icon: '🌙', blurb: 'Low gravity, big domes, suspicious cheese.', goal: 25, needsSingularities: 3, valueMul: 1400, sizeOffset: 35, xpMul: 0.81, seed: 6606 },
 ];
 
 export const MAP_COMPLETE_BONUS = 0.25;
@@ -240,17 +240,20 @@ export const MAP_COMPLETE_BONUS = 0.25;
  * floor(coef * (lifetimeCash / divisor)^exponent) DM in total, and each Singularity pays what you
  * have not claimed yet, so resetting at the same point again pays less and less. It becomes
  * available once `unlockMap` is unlocked. After the first run that reaches the Moon Base goal,
- * every such run raises the tier: maps start `tier` sizes smaller, pay and cost tierScale^tier
- * times more, and Dark Matter gains are x(1 + tierDmBonus * tier).
+ * every such run raises the tier: maps start min(tier, tierSizeCap) sizes smaller, pay and cost
+ * tierScale^tier times more, and Dark Matter gains are x(1 + tierDmBonus * tier). The size cap
+ * keeps tiers endless: past it a tier only scales the numbers, so every map goal stays reachable
+ * (uncapped, Moon Base would start at size 1 from about tier 20).
  */
 export const PRESTIGE = {
-  coef: 2.5,
+  coef: 1.75,
   divisor: 1e6,
   exponent: 0.25,
   bonusPerDm: 0.1,
   unlockMap: 'downtown' as MapId,
   tierScale: 4,
-  tierDmBonus: 0.5,
+  tierDmBonus: 0.1,
+  tierSizeCap: 10,
 };
 
 export type DmUpgradeId =
@@ -322,4 +325,8 @@ export const AUTOSAVE_SECONDS = 20;
 export const SAVE_KEY = 'snack-hole-save';
 /** Key used while the game was called Hungry Hole; read only when SAVE_KEY is empty. */
 export const LEGACY_SAVE_KEY = 'hungry-hole-save';
-export const SAVE_VERSION = 3;
+/** The save replaced by the last import or restore, so Settings can undo it. */
+export const BACKUP_SAVE_KEY = 'snack-hole-save-backup';
+/** A stored save that could not be read, kept as-is instead of being overwritten. */
+export const UNREADABLE_SAVE_KEY = 'snack-hole-save-unreadable';
+export const SAVE_VERSION = 4;

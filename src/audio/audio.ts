@@ -32,6 +32,8 @@ export class Audio {
   private ambientStyle = '';
   /** Next time (ctx seconds) an ambient one-shot (bird, gull) may play. */
   private nextCritter = 0;
+  /** Tab hidden: the context is suspended so nothing plays in the background. */
+  private hidden = false;
 
   /** Must be called from a user gesture. */
   unlock(): void {
@@ -59,7 +61,26 @@ export class Audio {
       this.applyVolume();
       if (this.ambientStyle) this.setAmbient(this.ambientStyle, true);
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    this.resume();
+  }
+
+  /**
+   * Resumes a paused context: 'suspended' (autoplay policy, or hidden by us) and iOS Safari's
+   * 'interrupted' (a phone call or switching apps). Browsers only allow it from a user gesture
+   * or once the tab is visible again.
+   */
+  private resume(): void {
+    const ctx = this.ctx;
+    if (!ctx || this.hidden || (ctx.state as string) === 'running' || ctx.state === 'closed') return;
+    void ctx.resume().catch(() => {});
+  }
+
+  /** Suspends all sound while the tab is hidden (music, ambience and effects keep no CPU busy). */
+  setHidden(hidden: boolean): void {
+    this.hidden = hidden;
+    if (!this.ctx) return;
+    if (hidden) void this.ctx.suspend().catch(() => {});
+    else this.resume();
   }
 
   setVolume(v: number, muted: boolean, ambient: boolean, tunes: boolean): void {
@@ -68,6 +89,14 @@ export class Audio {
     this.ambientOn = ambient;
     this.tunes = tunes;
     this.applyVolume();
+    this.syncSong();
+  }
+
+  /** Music plays the current map's track only while music is on and not muted (no download otherwise). */
+  private syncSong(): void {
+    if (!this.music) return;
+    if (this.tunes && !this.muted && this.ambientStyle) this.music.setSong(this.ambientStyle);
+    else this.music.stop();
   }
 
   /** Music is a bit quieter in the hub and ducks while paused. */
@@ -407,10 +436,14 @@ export class Audio {
    * its level and filter, plus occasional critters (see CRITTERS).
    */
   setAmbient(style: string, force = false): void {
-    if (style === this.ambientStyle && !force) return;
+    if (style === this.ambientStyle && !force) {
+      // Same map: retries the track if its download failed earlier.
+      this.syncSong();
+      return;
+    }
     this.ambientStyle = style;
     this.nextCritter = 0;
-    this.music?.setSong(style);
+    this.syncSong();
     if (!this.ctx || !this.ambient || !this.noiseBuf) return;
     for (const n of this.ambientNodes) {
       try {

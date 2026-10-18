@@ -137,7 +137,7 @@ async function run(viewport, prefix) {
       const s = window.game.debugState.save;
       s.maps.farm = true;
       s.maps.downtown = true;
-      s.lifetimeCash = 6e8;
+      s.lifetimeCash = 2e9;
       window.game.hub.selectTab('singularity');
     });
     await page.waitForTimeout(500);
