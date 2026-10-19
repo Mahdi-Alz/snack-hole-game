@@ -14,7 +14,6 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | 
       if (k === 'class') el.className = String(v);
       else if (k === 'style') el.setAttribute('style', String(v));
       else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v as EventListener);
-      else if (k === 'html') el.innerHTML = String(v);
       else el.setAttribute(k, String(v));
     }
   }
@@ -23,10 +22,6 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | 
     el.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
   }
   return el;
-}
-
-export function clear(el: HTMLElement): void {
-  while (el.firstChild) el.removeChild(el.firstChild);
 }
 
 /** Sets textContent only when it changed (avoids layout churn in per-frame updates). */

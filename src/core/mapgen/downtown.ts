@@ -1,11 +1,14 @@
 import {
   MapBuilder,
   PALETTE,
+  areaOf,
   buildRoadGrid,
   center,
   decorateWalks,
   faceDir,
   parkCars,
+  parkingRow,
+  ringStrips,
   shrink,
   startSnacks,
   subdivide,
@@ -94,13 +97,7 @@ function parkingBlock(b: MapBuilder, a: Area): void {
   b.rectArea(a, '#6b7079');
   const rows = 4;
   const rowD = (a.z1 - a.z0) / rows;
-  for (let r = 0; r < rows; r++) {
-    const z = a.z0 + rowD * (r + 0.5);
-    for (let x = a.x0 + 2; x < a.x1 - 2; x += 3) {
-      b.rect(x, z, 0.15, rowD * 0.6, '#f4f4f4');
-      if (b.rng.chance(0.55)) b.put(b.rng.chance(0.85) ? 'car' : 'van', x + 1.5, z, Math.PI / 2 + (b.rng.chance(0.5) ? Math.PI : 0), { force: true, tint: b.tint(PALETTE.car) });
-    }
-  }
+  for (let r = 0; r < rows; r++) parkingRow(b, a.x0 + 2, a.x1 - 2, a.z0 + rowD * (r + 0.5), rowD * 0.6, 0.55);
   b.scatter('cone', a, 6);
   b.scatter('barrier', a, 2);
 }
@@ -181,16 +178,9 @@ export function generateDowntown(seed: number): MapData {
 
   // Outer ring of mid-rise buildings and trees.
   const edge = lines[lines.length - 1] + hw + grid.style.walkW + 1;
-  const H = size / 2 - 1;
-  const strips: Area[] = [
-    { x0: -H, x1: H, z0: -H, z1: -edge },
-    { x0: -H, x1: H, z0: edge, z1: H },
-    { x0: -H, x1: -edge, z0: -edge, z1: edge },
-    { x0: edge, x1: H, z0: -edge, z1: edge },
-  ];
-  for (const s of strips) {
+  for (const s of ringStrips(b, edge)) {
     b.rectArea(s, '#c3beb2');
-    const area = (s.x1 - s.x0) * (s.z1 - s.z0);
+    const area = areaOf(s);
     b.scatter('apartment', s, Math.floor(area / 500), { tint: () => b.tint(PALETTE.building) });
     b.scatter('shop', s, Math.floor(area / 700), { tint: () => b.tint(PALETTE.house) });
     b.scatter(() => rng.weighted([['tree', 4], ['bush', 3], ['trash', 1], ['lamp', 1], ['bench', 1]] as [string, number][]), s, Math.floor(area / 40), { scale: [0.7, 1.1] });

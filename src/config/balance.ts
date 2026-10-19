@@ -41,6 +41,8 @@ export const VALUE = { coef: 6, exp: 1.3, heightDiv: 20 };
 export const ROUND = {
   baseTime: 60,
   warmupTime: 20,
+  /** The warm-up round is topped up to at least this much cash, so a first upgrade is always affordable. */
+  warmupMinCash: 30,
   perLevel: 10,
 };
 
@@ -98,8 +100,6 @@ export interface UpgradeDef {
   max: number;
   /** Lifetime cash this run required before the upgrade shows up. */
   unlockAt: number;
-  /** Requires at least one helper hole. */
-  needsHelper?: boolean;
 }
 
 /**
@@ -233,6 +233,8 @@ export const MAPS: MapDef[] = [
 ];
 
 export const MAP_COMPLETE_BONUS = 0.25;
+/** Share of a map eaten that counts as clearing it (its 100% mark and MAP_COMPLETE_BONUS). */
+export const MAP_CLEARED_FRACTION = 0.9995;
 
 // ---------------------------------------------------------------- prestige
 /**

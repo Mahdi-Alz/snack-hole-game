@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest';
+import { MAPS, type MapId } from '../src/config/balance';
+import { generateAirport } from '../src/core/mapgen/airport';
+import type { MapData } from '../src/core/mapgen/builder';
+import { generateDowntown } from '../src/core/mapgen/downtown';
+import { generateFarm } from '../src/core/mapgen/farm';
+import { generateHarbor } from '../src/core/mapgen/harbor';
+import { generateMoon } from '../src/core/mapgen/moon';
+import { generateSuburb } from '../src/core/mapgen/suburb';
+
+const GENERATORS: Record<MapId, (seed: number) => MapData> = {
+  suburb: generateSuburb,
+  downtown: generateDowntown,
+  farm: generateFarm,
+  harbor: generateHarbor,
+  airport: generateAirport,
+  moon: generateMoon,
+};
+
+/**
+ * Layout fingerprints (before the size ladder). A change here means the map's props moved: if
+ * that was intended, paste the new value from the failure message.
+ */
+const PINNED: Record<MapId, string> = {
+  suburb: '45bb77f2',
+  downtown: '43546087',
+  farm: 'c4970a1a',
+  harbor: '2eedbd16',
+  airport: 'e479fb48',
+  moon: 'a0480040',
+};
+
+/** FNV-1a over every spawn's type, placement, tint and movement (numbers in exact round-trip form). */
+function spawnHash(m: MapData): string {
+  let h = 2166136261;
+  const mix = (s: string) => {
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+  };
+  for (const s of m.spawns) {
+    mix(`${s.type},${s.x},${s.z},${s.rot},${s.scale},${s.tint}`);
+    const mv = s.move;
+    if (mv?.kind === 'graph') mix(`|g${mv.graph},${mv.lane},${mv.speed},${mv.from},${mv.to},${!!mv.flee}`);
+    else if (mv) mix(`|w${mv.x0},${mv.x1},${mv.z0},${mv.z1},${mv.speed},${!!mv.flee}`);
+    mix(';');
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+describe('map generators', () => {
+  for (const def of MAPS) {
+    it(`${def.id}: same seed, same layout`, () => {
+      const a = GENERATORS[def.id](def.seed);
+      const b = GENERATORS[def.id](def.seed);
+      expect(a.id).toBe(def.id);
+      expect(spawnHash(b)).toBe(spawnHash(a));
+      expect(spawnHash(a)).toBe(PINNED[def.id]);
+    });
+  }
+});

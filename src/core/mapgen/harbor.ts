@@ -1,11 +1,13 @@
 import {
   MapBuilder,
   PALETTE,
+  areaOf,
   buildRoadGrid,
   center,
   decorateWalks,
   faceDir,
   parkCars,
+  ringStrips,
   shrink,
   startSnacks,
   subdivide,
@@ -162,14 +164,11 @@ export function generateHarbor(seed: number): MapData {
   for (let i = 0; i < 30; i++) b.graphMover(rng.chance(0.5) ? 'worker' : 'person', grid.graph, rng.sign() * (hw + 1.2), 1.3, { flee: true, tint: b.tint(PALETTE.shirt) });
 
   // Land beyond the roads (north and sides): container stacks, scrub and trees.
+  // The quay and the sea lie south of the waterfront road (z = 26), so there is no south strip.
   const edge = 105 + hw + grid.style.walkW + 1;
-  const strips: Area[] = [
-    { x0: -H + 1, x1: H - 1, z0: -H + 1, z1: -edge },
-    { x0: -H + 1, x1: -edge, z0: -edge, z1: 26 },
-    { x0: edge, x1: H - 1, z0: -edge, z1: 26 },
-  ];
-  for (const s of strips) {
-    const area = (s.x1 - s.x0) * (s.z1 - s.z0);
+  const [north, , west, east] = ringStrips(b, edge);
+  for (const s of [north, { ...west, z1: 26 }, { ...east, z1: 26 }]) {
+    const area = areaOf(s);
     b.scatter('container', s, Math.floor(area / 180), { tint: () => b.tint(PALETTE.container) });
     b.scatter(() => rng.weighted([['palm', 3], ['bush', 3], ['crate', 2], ['barrel', 2], ['rock', 1]] as [string, number][]), s, Math.floor(area / 35), { scale: [0.8, 1.2] });
   }

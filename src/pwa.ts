@@ -1,4 +1,4 @@
-/** Cache names the service worker (public/sw.js template, built by vite.config.ts) creates. */
+/** Cache names the service worker (src/service-worker.js template, built by vite.config.ts) creates. */
 const CACHE_PREFIX = 'snack-hole-';
 
 /**

@@ -190,6 +190,31 @@ export class ObjectsView {
     this.ghostPool.push(g);
   }
 
+  /** Sight line for visitOccluder, set by updateOcclusion (fields, so no closure per frame). */
+  private occ = { hx: 0, hz: 0, R: 0, fit: 0, dx: 0, dz: 0, L2: 1, L: 1, camY: 0 };
+
+  /** Marks a prop as see-through if it stands on the sight line and is too big to swallow. */
+  private visitOccluder = (o: WObj): void => {
+    const { hx, hz, R, fit, dx, dz, L2, L, camY } = this.occ;
+    // Flying event props (the UFO) pass quickly and are the show: never fade them.
+    if (o.state !== ALIVE || o.f <= fit || o.fly) return;
+    const top = o.y + o.h;
+    if (top < 1 || top < R * 0.5) return;
+    const ox = o.x - hx;
+    const oz = o.z - hz;
+    const t = (ox * dx + oz * dz) / L2;
+    // Centre well behind the hole (from the camera's side): it cannot hide it.
+    if (t * L < -(o.f * 0.6 + R * 0.3)) return;
+    const tc = Math.min(1, Math.max(0, t));
+    const qx = ox - dx * tc;
+    const qz = oz - dz * tc;
+    if (qx * qx + qz * qz > (o.f * 0.85 + R * 0.7) ** 2) return;
+    // Height of the sight line where it enters the prop's footprint.
+    if (camY * Math.max(0, t - o.f / L) > top) return;
+    const g = this.ghosts.get(o) ?? this.acquireGhost(o);
+    if (g) g.hold = 0.3;
+  };
+
   /**
    * Fades props that stand between the camera and the hole and are too big to swallow, so the
    * player can see what is going on behind a building.
@@ -198,37 +223,23 @@ export class ObjectsView {
     const w = this.world;
     if (w && cam) {
       const h = w.main;
-      const R = h.r;
-      const fit = SIZE.fit * R;
-      const dx = cam.x - h.x;
-      const dz = cam.z - h.z;
-      const L2 = dx * dx + dz * dz;
-      const L = Math.sqrt(L2) || 1;
-      const visit = (o: WObj) => {
-        // Flying event props (the UFO) pass quickly and are the show: never fade them.
-        if (o.state !== ALIVE || o.f <= fit || o.fly) return;
-        const top = o.y + o.h;
-        if (top < 1 || top < R * 0.5) return;
-        const ox = o.x - h.x;
-        const oz = o.z - h.z;
-        const t = (ox * dx + oz * dz) / L2;
-        // Centre well behind the hole (from the camera's side): it cannot hide it.
-        if (t * L < -(o.f * 0.6 + R * 0.3)) return;
-        const tc = Math.min(1, Math.max(0, t));
-        const qx = ox - dx * tc;
-        const qz = oz - dz * tc;
-        if (qx * qx + qz * qz > (o.f * 0.85 + R * 0.7) ** 2) return;
-        // Height of the sight line where it enters the prop's footprint.
-        if (cam.y * Math.max(0, t - o.f / L) > top) return;
-        const g = this.ghosts.get(o) ?? this.acquireGhost(o);
-        if (g) g.hold = 0.3;
-      };
-      const mx = h.x + dx * 0.5;
-      const mz = h.z + dz * 0.5;
-      w.grid.query(mx, mz, L * 0.5 + Math.min(w.maxF, 30), visit);
-      for (const o of w.movers) visit(o);
+      const occ = this.occ;
+      occ.hx = h.x;
+      occ.hz = h.z;
+      occ.R = h.r;
+      occ.fit = SIZE.fit * h.r;
+      occ.dx = cam.x - h.x;
+      occ.dz = cam.z - h.z;
+      occ.L2 = occ.dx * occ.dx + occ.dz * occ.dz;
+      occ.L = Math.sqrt(occ.L2) || 1;
+      occ.camY = cam.y;
+      const mx = h.x + occ.dx * 0.5;
+      const mz = h.z + occ.dz * 0.5;
+      w.grid.query(mx, mz, occ.L * 0.5 + Math.min(w.maxF, 30), this.visitOccluder);
+      for (const o of w.movers) this.visitOccluder(o);
     }
-    for (const g of [...this.ghosts.values()]) {
+    // Deleting the current entry while iterating a Map is safe.
+    for (const g of this.ghosts.values()) {
       const o = g.o!;
       if (o.state !== ALIVE || !w) {
         this.releaseGhost(g);
@@ -248,7 +259,6 @@ export class ObjectsView {
   update(dt: number, time: number): void {
     const w = this.world;
     if (!w) return;
-    const touched = new Set<THREE.InstancedMesh>();
     const objs = w.objects;
     for (let i = 0; i < objs.length; i++) {
       const o = objs[i];
@@ -260,9 +270,9 @@ export class ObjectsView {
       o.dirty = false;
       const mesh = this.meshes.get(meshKey(o))!;
       this.writeMatrix(mesh, o, time);
-      touched.add(mesh);
+      // Only bumps a version number: each mesh still uploads once per render.
+      mesh.instanceMatrix.needsUpdate = true;
     }
-    for (const m of touched) m.instanceMatrix.needsUpdate = true;
   }
 
   clear(): void {

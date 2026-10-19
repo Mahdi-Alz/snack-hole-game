@@ -8,6 +8,7 @@ import {
   fenceRect,
   fieldPaint,
   natureRing,
+  ringPoints,
   shrink,
   subdivide,
   type Area,
@@ -121,10 +122,7 @@ export function generateFarm(seed: number): MapData {
   const hw = grid.style.roadW / 2;
 
   // Start: a chicken party at the crossroads.
-  for (let k = 0; k < 12; k++) {
-    const ang = (k / 12) * Math.PI * 2;
-    b.put('pumpkin', Math.cos(ang) * 3.5, Math.sin(ang) * 3.5, ang, { force: true });
-  }
+  for (const p of ringPoints(12, 0, 0, 3.5)) b.put('pumpkin', p.x, p.z, p.ang, { force: true });
   for (let i = 0; i < 14; i++) b.wanderer('chicken', { x0: -8, x1: 8, z0: -8, z1: 8 }, 0.8, { flee: true });
   b.put('haybale', -6, -6, 0, { force: true });
   b.put('haybale', 6, 6, 0, { force: true });
@@ -160,6 +158,12 @@ export function generateFarm(seed: number): MapData {
   for (let i = 0; i < 2; i++) b.graphMover('van', grid.graph, lane, 6, { tint: b.tint(PALETTE.car) });
   for (let i = 0; i < 16; i++) b.graphMover('person', grid.graph, rng.sign() * (hw + 0.7), 1.2, { flee: true, tint: b.tint(PALETTE.shirt) });
   for (let i = 0; i < 6; i++) b.graphMover('dog', grid.graph, rng.sign() * (hw + 0.7), 1.8, { flee: true, tint: 0xc98b4f });
+  b.herd = [
+    ['cow', 4],
+    ['sheep', 4],
+    ['pig', 2],
+    ['horse', 2],
+  ];
 
   natureRing(b, lines[2] + hw + grid.style.walkW + 1, [
     ['tree', 4],

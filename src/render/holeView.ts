@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import type { SkinDef } from '../config/balance';
 
+/** Pulse decay rate (1/s): -ln(0.92) * 60. */
+const PULSE_DECAY = 5;
+
 const SWIRL_MODE: Record<SkinDef['swirl'], number> = { none: 0, spiral: 1, rings: 2, stars: 3, galaxy: 4 };
 
 const wallVert = /* glsl */ `
@@ -158,7 +161,8 @@ export class HoleView {
     this.rimMat.color.set(skin.rim);
   }
 
-  update(x: number, z: number, r: number, time: number, visible = true): void {
+  /** `dt` (real frame seconds) eases the pulse back down. */
+  update(x: number, z: number, r: number, time: number, visible = true, dt = 1 / 60): void {
     this.group.visible = visible && r > 0.01;
     const depth = r * 2.2 + 1.5;
     this.wall.position.set(x, -depth / 2, z);
@@ -170,7 +174,8 @@ export class HoleView {
     this.glow.position.set(x, 0.015, z);
     this.glow.scale.set(r, 1, r);
     this.uniforms.uTime.value = time;
-    this.pulse *= 0.92;
+    // Same decay as the old 0.92 per frame at 60 Hz, independent of frame rate.
+    this.pulse *= Math.exp(-PULSE_DECAY * dt);
     this.uniforms.uPulse.value = Math.min(1, this.pulse);
   }
 

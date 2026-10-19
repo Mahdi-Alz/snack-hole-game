@@ -1,11 +1,13 @@
 import {
   MapBuilder,
   PALETTE,
+  areaOf,
   buildRoadGrid,
   center,
   decorateWalks,
   faceDir,
   parkCars,
+  ringStrips,
   shrink,
   startSnacks,
   subdivide,
@@ -98,7 +100,7 @@ function park(b: MapBuilder, a: Area): void {
   b.reserveArea({ x0: c.x - 1.3, x1: c.x + 1.3, z0: a.z0, z1: a.z1 });
   b.put('fountain', c.x, c.z, 0, { force: true });
   const quads = subdivide(a, 2, 2).map((q) => shrink(q, 1.8));
-  const order = [0, 1, 2, 3].sort(() => rng.next() - 0.5);
+  const order = rng.shuffle([0, 1, 2, 3]);
   // Pond
   const pq = quads[order[0]];
   const pc = center(pq);
@@ -258,15 +260,8 @@ export function generateSuburb(seed: number): MapData {
 
   // Woodland ring outside the road grid.
   const edge = lines[lines.length - 1] + hw + grid.style.walkW + 1;
-  const H = size / 2 - 1;
-  const strips: Area[] = [
-    { x0: -H, x1: H, z0: -H, z1: -edge },
-    { x0: -H, x1: H, z0: edge, z1: H },
-    { x0: -H, x1: -edge, z0: -edge, z1: edge },
-    { x0: edge, x1: H, z0: -edge, z1: edge },
-  ];
-  for (const s of strips) {
-    const area = (s.x1 - s.x0) * (s.z1 - s.z0);
+  for (const s of ringStrips(b, edge)) {
+    const area = areaOf(s);
     b.scatter(() => rng.weighted([['tree', 4], ['pine', 5], ['bush', 3], ['rock', 2]] as [string, number][]), s, Math.floor(area / 22), {
       scale: [0.7, 1.4],
     });

@@ -44,14 +44,27 @@ export class Particles {
   private grav = new Float32Array(MAX);
   private next = 0;
   private mat: THREE.ShaderMaterial;
-  private _c = new THREE.Color();
+  /** Parsed colours by the value emit was given (a handful of skin and effect colours). */
+  private colors = new Map<string | number, THREE.Color>();
+  private aPos: THREE.BufferAttribute;
+  private aColor: THREE.BufferAttribute;
+  private aSize: THREE.BufferAttribute;
+  private aAlpha: THREE.BufferAttribute;
+  /** Particles alive after the last update; 0 means the GPU copy is already all hidden. */
+  private live = 0;
+  /** Emitted since the last update (new colours to upload, or particles to show). */
+  private emitted = false;
 
   constructor() {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('aColor', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('aAlpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
+    this.aPos = new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.aColor = new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage);
+    this.aSize = new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage);
+    this.aAlpha = new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', this.aPos);
+    geo.setAttribute('aColor', this.aColor);
+    geo.setAttribute('aSize', this.aSize);
+    geo.setAttribute('aAlpha', this.aAlpha);
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uScale: { value: 400 } },
       vertexShader: vert,
@@ -78,14 +91,20 @@ export class Particles {
     this.vel[i * 3] = vx;
     this.vel[i * 3 + 1] = vy;
     this.vel[i * 3 + 2] = vz;
-    this._c.set(color);
-    this.col[i * 3] = this._c.r;
-    this.col[i * 3 + 1] = this._c.g;
-    this.col[i * 3 + 2] = this._c.b;
+    let c = this.colors.get(color);
+    if (!c) {
+      if (this.colors.size > 64) this.colors.clear();
+      c = new THREE.Color(color);
+      this.colors.set(color, c);
+    }
+    this.col[i * 3] = c.r;
+    this.col[i * 3 + 1] = c.g;
+    this.col[i * 3 + 2] = c.b;
     this.baseSize[i] = size;
     this.life[i] = life;
     this.maxLife[i] = life;
     this.grav[i] = gravity;
+    this.emitted = true;
   }
 
   /** Burst of sparkles rising out of the hole when something is swallowed. */
@@ -121,12 +140,16 @@ export class Particles {
   }
 
   update(dt: number): void {
+    // Nothing alive and already hidden on the GPU, or paused with nothing new: no work, no upload.
+    if (!this.emitted && (this.live === 0 || dt === 0)) return;
+    let live = 0;
     for (let i = 0; i < MAX; i++) {
       if (this.life[i] <= 0) {
         this.alpha[i] = 0;
         this.size[i] = 0;
         continue;
       }
+      live++;
       this.life[i] -= dt;
       const t = Math.max(0, this.life[i] / this.maxLife[i]);
       this.vel[i * 3 + 1] += this.grav[i] * dt;
@@ -136,10 +159,11 @@ export class Particles {
       this.alpha[i] = Math.min(1, t * 2);
       this.size[i] = this.baseSize[i] * (0.4 + 0.6 * t);
     }
-    const g = this.points.geometry;
-    (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aColor') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aSize') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aAlpha') as THREE.BufferAttribute).needsUpdate = true;
+    this.aPos.needsUpdate = true;
+    this.aSize.needsUpdate = true;
+    this.aAlpha.needsUpdate = true;
+    if (this.emitted) this.aColor.needsUpdate = true;
+    this.emitted = false;
+    this.live = live;
   }
 }

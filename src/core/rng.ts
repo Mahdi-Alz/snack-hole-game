@@ -33,6 +33,18 @@ export class Rng {
     return this.next() < 0.5 ? -1 : 1;
   }
 
+  /**
+   * Shuffles `arr` in place (Fisher-Yates) and returns it. Never shuffle with a random sort
+   * comparator: its result and draw count depend on the engine's sort, so maps would differ by browser.
+   */
+  shuffle<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = this.int(0, i);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
   /** Weighted pick from [item, weight] pairs. */
   weighted<T>(items: readonly (readonly [T, number])[]): T {
     let total = 0;
@@ -44,13 +56,4 @@ export class Rng {
     }
     return items[items.length - 1][0];
   }
-}
-
-export function hashString(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }

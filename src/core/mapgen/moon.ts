@@ -1,4 +1,4 @@
-import { MapBuilder, faceDir, shrink, type Area, type MapData } from './builder';
+import { MapBuilder, faceDir, ringPoints, shrink, type Area, type MapData } from './builder';
 
 export function generateMoon(seed: number): MapData {
   const size = 300;
@@ -72,9 +72,8 @@ export function generateMoon(seed: number): MapData {
   for (let i = 0; i < 5; i++) b.put('dish', -100 + i * 9, -20 + (i % 2) * 6, faceDir(1, -1), { force: true });
 
   // Start area: rocks, flags and astronauts.
-  for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    b.put(k % 3 === 0 ? 'flag' : 'moonrock', Math.cos(a) * 3.6, 30 + Math.sin(a) * 3.6, a, { force: true, tint: 0xe84a4a, scale: k % 3 === 0 ? 1 : rng.range(0.4, 0.7) });
+  for (const p of ringPoints(12, 0, 30, 3.6)) {
+    b.put(p.k % 3 === 0 ? 'flag' : 'moonrock', p.x, p.z, p.ang, { force: true, tint: 0xe84a4a, scale: p.k % 3 === 0 ? 1 : rng.range(0.4, 0.7) });
   }
   for (let i = 0; i < 6; i++) b.wanderer('astronaut', { x0: -10, x1: 10, z0: 20, z1: 40 }, 0.9, { flee: true, tint: 0xe84a4a });
 

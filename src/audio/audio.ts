@@ -4,6 +4,11 @@ import { Music } from './music';
 /** Music bus level per game state (times MUSIC_LEVEL). */
 const MUSIC_MODE = { hub: 0.7, round: 1, paused: 0.35 };
 const MUSIC_LEVEL = 0.45;
+/** At most GULP_MAX gulps start per GULP_WINDOW seconds; a vortex or magnet swallows hundreds a second. */
+const GULP_WINDOW = 0.05;
+const GULP_MAX = 3;
+/** Seconds a settings change may keep fading (ambience, music and master gain ramps). */
+const FADE_TAIL = 1.5;
 
 /**
  * Sound effects and ambience are synthesised with WebAudio: gulps (pitch drops with size), combo
@@ -21,7 +26,9 @@ export class Audio {
   private musicMode: keyof typeof MUSIC_MODE = 'hub';
   private ambientNodes: AudioNode[] = [];
   private noiseBuf: AudioBuffer | null = null;
-  private gulpsThisFrame = 0;
+  /** Gulps started in the current GULP_WINDOW, and when that window opened (ctx seconds). */
+  private gulpsInWindow = 0;
+  private gulpWindowAt = -1;
   /** Recent gulp density (decays over ~0.6 s); fast streaks play each gulp quieter. */
   private gulpEnergy = 0;
   private gulpAt = 0;
@@ -34,6 +41,13 @@ export class Audio {
   private nextCritter = 0;
   /** Tab hidden: the context is suspended so nothing plays in the background. */
   private hidden = false;
+  /**
+   * The state last asked of the context. suspend() and resume() settle later, so ctx.state can
+   * still read 'running' right after a suspend; decisions use this instead.
+   */
+  private intent: 'running' | 'suspended' = 'running';
+  /** Context time until which a fade started by a settings change may still be sounding. */
+  private fadeUntil = 0;
 
   /** Must be called from a user gesture. */
   unlock(): void {
@@ -60,27 +74,56 @@ export class Audio {
       this.music = new Music(this.ctx, this.musicBus);
       this.applyVolume();
       if (this.ambientStyle) this.setAmbient(this.ambientStyle, true);
+      // Start it inside this gesture even when muted (sync may suspend it right after): iOS only
+      // lets a context that started from a gesture resume later from a slider or a toggle.
+      void this.ctx.resume().catch(() => {});
+      this.intent = 'running';
     }
-    this.resume();
+    this.sync(true);
+  }
+
+  /** Muted or at volume 0: effects are skipped and the context is suspended. */
+  private get silent(): boolean {
+    return this.muted || this.volume <= 0;
   }
 
   /**
-   * Resumes a paused context: 'suspended' (autoplay policy, or hidden by us) and iOS Safari's
-   * 'interrupted' (a phone call or switching apps). Browsers only allow it from a user gesture
-   * or once the tab is visible again.
+   * The context runs unless the tab is hidden, muted or at volume 0; fades a settings change
+   * started finish first. It never idles while audible: waking it for an effect would need a
+   * resume() outside a user gesture, which iOS Safari may refuse.
    */
-  private resume(): void {
+  private wantRunning(ctx: AudioContext): boolean {
+    if (this.hidden) return false;
+    if (ctx.currentTime < this.fadeUntil) return true;
+    return !this.silent;
+  }
+
+  /**
+   * Suspends or resumes the context to match wantRunning(). `force` resumes even when running was
+   * already asked for: from a user gesture or when the tab is visible again, the only times
+   * browsers allow it, since autoplay policy or iOS Safari's 'interrupted' (a phone call,
+   * switching apps) may have paused the context without us.
+   */
+  private sync(force = false): void {
     const ctx = this.ctx;
-    if (!ctx || this.hidden || (ctx.state as string) === 'running' || ctx.state === 'closed') return;
-    void ctx.resume().catch(() => {});
+    if (!ctx || ctx.state === 'closed') return;
+    const want = this.wantRunning(ctx) ? 'running' : 'suspended';
+    if (want === 'running') {
+      if (force || this.intent !== 'running') void ctx.resume().catch(() => {});
+    } else if (this.intent !== 'suspended') void ctx.suspend().catch(() => {});
+    this.intent = want;
+  }
+
+  /** The context for a new effect, or null when effects are silent (no context, muted, volume 0 or hidden). */
+  private fx(): AudioContext | null {
+    const ctx = this.ctx;
+    return !ctx || this.hidden || this.silent ? null : ctx;
   }
 
   /** Suspends all sound while the tab is hidden (music, ambience and effects keep no CPU busy). */
   setHidden(hidden: boolean): void {
     this.hidden = hidden;
-    if (!this.ctx) return;
-    if (hidden) void this.ctx.suspend().catch(() => {});
-    else this.resume();
+    this.sync(!hidden);
   }
 
   setVolume(v: number, muted: boolean, ambient: boolean, tunes: boolean): void {
@@ -88,14 +131,21 @@ export class Audio {
     this.muted = muted;
     this.ambientOn = ambient;
     this.tunes = tunes;
+    // Let the fades this change starts finish before the context may suspend.
+    if (this.ctx && this.intent === 'running') this.fadeUntil = this.ctx.currentTime + FADE_TAIL;
     this.applyVolume();
     this.syncSong();
+    this.sync();
   }
 
-  /** Music plays the current map's track only while music is on and not muted (no download otherwise). */
+  /**
+   * Music plays the current map's track only while music is on and audible (no download
+   * otherwise). Volume 0 stops it like mute: the context then suspends, and a track still fading
+   * out on a frozen clock would never stop or free its buffer.
+   */
   private syncSong(): void {
     if (!this.music) return;
-    if (this.tunes && !this.muted && this.ambientStyle) this.music.setSong(this.ambientStyle);
+    if (this.tunes && !this.silent && this.ambientStyle) this.music.setSong(this.ambientStyle);
     else this.music.stop();
   }
 
@@ -113,9 +163,11 @@ export class Audio {
   }
 
   endFrame(): void {
-    this.gulpsThisFrame = 0;
     const ctx = this.ctx;
-    if (!ctx || this.muted || ctx.state !== 'running') return;
+    if (!ctx) return;
+    // Suspends the context once a mute or volume-0 fade has died away.
+    this.sync();
+    if (this.silent || ctx.state !== 'running') return;
     if (!this.ambientOn) return;
     const critter = CRITTERS[this.ambientStyle];
     if (!critter || ctx.currentTime < this.nextCritter) return;
@@ -173,28 +225,39 @@ export class Audio {
     this.tone(freq * 3.02, 'sine', t, vol * 0.12, 0.003, decay * 0.35);
   }
 
-  /** Gulp: bigger footprint = deeper, longer, louder. */
+  /**
+   * Gulp: bigger footprint = deeper, longer, louder. Capped per time window (not per frame, so a
+   * 120 Hz screen gets no more); stacked gulps drop the extra partial and the noise layer.
+   */
   gulp(footprint: number): void {
-    if (!this.ctx || this.gulpsThisFrame > 3) return;
-    this.gulpsThisFrame++;
-    const now = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    if (now - this.gulpWindowAt >= GULP_WINDOW || now < this.gulpWindowAt) {
+      this.gulpWindowAt = now;
+      this.gulpsInWindow = 0;
+    }
+    if (this.gulpsInWindow >= GULP_MAX) return;
+    const n = this.gulpsInWindow++;
     this.gulpEnergy = this.gulpEnergy * Math.exp(-(now - this.gulpAt) / 0.6) + 1;
     this.gulpAt = now;
-    const t = now + this.gulpsThisFrame * 0.012;
+    const t = now + (n + 1) * 0.012;
     const size = Math.min(1, Math.log2(1 + footprint) / 5);
     const base = 620 * Math.pow(0.42, size * 2.2) * (0.92 + Math.random() * 0.16);
     const dur = 0.09 + size * 0.35;
     const duck = 1 / (1 + 0.12 * Math.max(0, this.gulpEnergy - 2));
     const vol = (0.12 + size * 0.25) * duck;
     this.tone(base * 1.6, 'sine', t, vol, 0.01, dur, base * 0.55);
+    if (n > 0) return;
     this.tone(base * 0.8, 'triangle', t + 0.02, vol * 0.6, 0.015, dur * 0.8, base * 0.4);
     if (size > 0.45) this.noise(t, dur * 1.4, vol * 0.5, 900, 1, 120);
   }
 
   /** Golden prop swallowed: bright coin-like double ding. */
   goldDing(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     this.bell(1975.5, t, 0.07, 0.35);
     this.bell(2637, t + 0.07, 0.08, 0.6);
     this.noise(t + 0.05, 0.3, 0.025, 7000, 0.7, 11000, 'highpass');
@@ -202,8 +265,9 @@ export class Audio {
 
   /** Landmark swallowed: deep rumble and crumbling debris; `full` adds a low boom and a bell chord. */
   landmark(footprint: number, full: boolean): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     const size = Math.min(1, Math.log2(1 + footprint) / 5);
     const k = full ? 1 : 0.55;
     this.tone(70 - size * 25, 'sine', t, 0.3 * k, 0.02, full ? 1.2 : 0.6, 28);
@@ -214,8 +278,9 @@ export class Audio {
 
   /** Short announcement jingle for a random event. */
   eventStinger(id: string): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     if (id === 'rush') {
       // Two honks.
       for (const dt of [0, 0.22]) {
@@ -234,8 +299,9 @@ export class Audio {
 
   /** Combo milestone: a mallet note that climbs a pentatonic scale with the streak. */
   combo(step: number): void {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
     if (now - this.lastChime < 0.06) return;
     this.lastChime = now;
     const scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
@@ -245,24 +311,27 @@ export class Audio {
 
   /** The combo multiplier just hit its cap: one sparkly flourish, then silence for the streak. */
   comboMax(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     [0, 4, 7, 12, 16].forEach((s, i) => this.mallet(784 * Math.pow(2, s / 12), t + i * 0.045, 0.07, 0.35));
     this.bell(1568, t + 0.24, 0.05, 0.9);
     this.noise(t + 0.2, 0.6, 0.03, 6000, 0.8, 9000, 'highpass');
   }
 
   levelUp(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     [0, 4, 7, 12].forEach((s, i) => this.tone(440 * Math.pow(2, s / 12), 'triangle', t + i * 0.06, 0.13, 0.01, 0.22));
     this.noise(t, 0.4, 0.05, 3000, 0.7, 8000, 'bandpass');
   }
 
   /** Round results: bright mallet run into a soft major chord. `big` for a cleared map. */
   fanfare(big = false): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     const run = big ? [0, 4, 7, 12, 16, 19, 24] : [0, 4, 7, 12];
     run.forEach((s, i) => this.mallet(523.25 * Math.pow(2, s / 12), t + i * 0.075, 0.08, 0.35));
     const t2 = t + run.length * 0.075 + 0.04;
@@ -273,8 +342,9 @@ export class Audio {
 
   /** Time's up: a bright two-note bell over a soft low thump (replaces the referee whistle). */
   whistle(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     this.bell(1760, t, 0.08, 1.1);
     this.bell(2217.5, t, 0.05, 1.0);
     this.tone(110, 'sine', t, 0.16, 0.005, 0.35, 55);
@@ -282,8 +352,9 @@ export class Audio {
 
   /** Last seconds: soft wood ticks at 5 and 4, rising mallet beeps at 3, 2, 1. */
   tick(secondsLeft: number): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     if (secondsLeft > 3) {
       this.tone(1100, 'sine', t, 0.05, 0.002, 0.05, 700);
       this.noise(t, 0.03, 0.04, 2400, 5, undefined, 'bandpass');
@@ -295,26 +366,30 @@ export class Audio {
   }
 
   click(): void {
-    if (!this.ctx) return;
-    this.tone(700, 'triangle', this.ctx.currentTime, 0.06, 0.003, 0.05, 500);
+    const ctx = this.fx();
+    if (!ctx) return;
+    this.tone(700, 'triangle', ctx.currentTime, 0.06, 0.003, 0.05, 500);
   }
 
   buy(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     this.tone(1318.5, 'square', t, 0.04, 0.003, 0.08);
     this.tone(1760, 'square', t + 0.07, 0.04, 0.003, 0.16);
     this.tone(2637, 'sine', t + 0.07, 0.04, 0.003, 0.25);
   }
 
   deny(): void {
-    if (!this.ctx) return;
-    this.tone(180, 'sawtooth', this.ctx.currentTime, 0.05, 0.005, 0.12, 120);
+    const ctx = this.fx();
+    if (!ctx) return;
+    this.tone(180, 'sawtooth', ctx.currentTime, 0.05, 0.005, 0.12, 120);
   }
 
   ability(kind: string): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     if (kind === 'dash') {
       // Whoosh + low thump + quick upward zip.
       this.noise(t, 0.4, 0.2, 300, 1.5, 3500, 'bandpass');
@@ -331,14 +406,16 @@ export class Audio {
   }
 
   achievement(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     [0, 7, 12, 16, 19].forEach((s, i) => this.tone(523.25 * Math.pow(2, s / 12), 'sine', t + i * 0.07, 0.1, 0.005, 0.4));
   }
 
   singularity(): void {
-    if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.fx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
     this.tone(400, 'sawtooth', t, 0.12, 0.05, 2.5, 30);
     this.noise(t, 2.5, 0.2, 6000, 1, 60);
     [0, 7, 12, 19, 24].forEach((s, i) => this.tone(220 * Math.pow(2, s / 12), 'sine', t + 2.2 + i * 0.1, 0.1, 0.01, 1.2));

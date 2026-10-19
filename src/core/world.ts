@@ -1,4 +1,4 @@
-import { ABILITIES, ABILITY_LEVEL, EVENTS, GOLDEN, HELPERS, ROUND_END, SIZE, type AbilityId } from '../config/balance';
+import { ABILITIES, ABILITY_LEVEL, GOLDEN, HELPERS, MAP_CLEARED_FRACTION, ROUND_END, SIZE, type AbilityId } from '../config/balance';
 import { OBJECT_TYPES, baseValueOf, distToSolid, footprintOf, solidShape, typeId, xpOf } from '../config/objects';
 import {
   comboMult,
@@ -13,7 +13,10 @@ import {
 } from './economy';
 import type { MapData } from './mapgen/builder';
 import { Rng } from './rng';
+import { RoundEvents, type EventId } from './roundEvents';
 import { SpatialGrid } from './spatial';
+
+export type { EventId };
 
 export const ALIVE = 0;
 export const FALLING = 1;
@@ -26,8 +29,6 @@ export const MV_GRAPH = 1;
 export const MV_WANDER = 2;
 /** Straight run to (tx, tz), then leave the stage (stampedes, UFO fly-by). */
 export const MV_RUN = 3;
-
-export type EventId = 'rush' | 'ufo' | 'stampede';
 
 /** A prop in the world. Plain mutable class so V8 keeps one hidden shape. */
 export class WObj {
@@ -61,12 +62,13 @@ export class WObj {
   tx = 0;
   tz = 0;
   wait = 0;
+  /** MV_RUN: seconds spent detouring around the current obstacle (see RUNNER_PATIENCE). */
+  detour = 0;
   x0 = 0;
   x1 = 0;
   z0 = 0;
   z1 = 0;
   bob = 0;
-  panic = 0;
   // falling
   hole = -1;
   ox = 0;
@@ -100,7 +102,6 @@ export class WHole {
   level = 0;
   xp = 0;
   main = true;
-  active = true;
   // helper AI
   tx = 0;
   tz = 0;
@@ -110,7 +111,6 @@ export class WHole {
 
 export type WEvent =
   | { k: 'eat'; o: WObj; hole: number; cash: number; combo: number }
-  | { k: 'gone'; o: WObj }
   | { k: 'level'; level: number }
   | { k: 'comboEnd'; n: number }
   | { k: 'ability'; id: AbilityId }
@@ -187,11 +187,23 @@ function blockMapFor(map: MapData): BlockMap {
   return bm;
 }
 
-function lerpAngle(a: number, b: number, t: number): number {
+export function lerpAngle(a: number, b: number, t: number): number {
   let d = b - a;
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
+}
+
+/** Spends `g.xp` on size levels, one level's cost at a time. Returns how many levels `g` gained. */
+function spendXp(g: { level: number; xp: number }): number {
+  const from = g.level;
+  let need = xpForLevel(g.level);
+  while (g.xp >= need) {
+    g.xp -= need;
+    g.level++;
+    need = xpForLevel(g.level);
+  }
+  return g.level - from;
 }
 
 export class World {
@@ -238,21 +250,10 @@ export class World {
   /** Golden props (for sparkles). */
   readonly golden: WObj[] = [];
   goldEaten = 0;
-  /** Random event in progress, if any. */
-  eventId: EventId | null = null;
   private readonly block: BlockMap;
-  private eventsOn = false;
-  private eventTimer = 0;
-  private eventLeft = 0;
-  /** Events rolled for this round, in play order. */
-  private plan: EventId[] = [];
-  private rushPool: WObj[] = [];
-  private herd: WObj[] = [];
-  private ufo: WObj | null = null;
-  private drops: WObj[] = [];
-  private dropTimer = 0;
-  private readonly dropping: WObj[] = [];
-  private readonly leaving: WObj[] = [];
+  private readonly roundEvents: RoundEvents;
+  /** Static props the magnet moved during a grid query; re-filed after it so none is visited twice. */
+  private readonly pulled: WObj[] = [];
 
   constructor(
     readonly map: MapData,
@@ -266,23 +267,11 @@ export class World {
     // Big abilities start part-charged so they land mid-round instead of being spent at second 0.
     for (const a of ABILITIES) this.abilities[a.id].cd = cfg.abilities[a.id].cooldown * (1 - a.startCharge);
 
-    let id = 0;
     for (const s of map.spawns) {
-      const t = typeId(s.type);
-      const def = OBJECT_TYPES[t];
-      const o = new WObj();
-      o.id = id++;
-      o.t = t;
+      const o = this.initObj(s.type, s.scale, s.tint);
       o.x = s.x;
       o.z = s.z;
       o.rot = s.rot;
-      o.s = s.scale;
-      o.tint = s.tint;
-      o.f = footprintOf(def, s.scale);
-      o.h = def.h * s.scale;
-      o.baseY = o.y = def.hover ?? 0;
-      o.value = baseValueOf(def, s.scale) * cfg.mapMul;
-      o.xp = xpOf(def, s.scale);
       // Map % is weighted by ground area, so landmarks count for more than a pile of cones.
       o.w = o.f * o.f;
       this.weightTotal += o.w;
@@ -313,10 +302,10 @@ export class World {
       } else {
         this.grid.insert(o);
       }
-      this.objects.push(o);
     }
 
-    if (!opts.demo) this.setupEvents();
+    this.roundEvents = new RoundEvents(this);
+    if (!opts.demo) this.roundEvents.setup();
     for (const o of this.objects) {
       if (o.gold || this.rng.next() >= cfg.goldChance) continue;
       this.makeGolden(o);
@@ -347,20 +336,21 @@ export class World {
     return this.holes[0];
   }
 
+  /** Random event in progress, if any. */
+  get eventId(): EventId | null {
+    return this.roundEvents.current;
+  }
+
   /** The event UFO while it is crossing the map. */
   get ufoFlying(): WObj | null {
-    return this.ufo && this.ufo.state === ALIVE ? this.ufo : null;
+    return this.roundEvents.ufoFlying;
   }
 
-  private makeGolden(o: WObj): void {
-    o.gold = true;
-    o.value *= GOLDEN.valueMul;
-    this.golden.push(o);
-  }
-
-  // ------------------------------------------------------------ random events
-  /** Off-stage props for the events this map supports. They join the world when an event fires. */
-  private eventObj(type: string, scale = 1, tint = 0xffffff): WObj {
+  /**
+   * A new prop of `type`, appended to `objects` with its size, value and XP for this round. The
+   * caller places it and sets weight and movement. Also used by RoundEvents for its props.
+   */
+  initObj(type: string, scale: number, tint: number): WObj {
     const t = typeId(type);
     const def = OBJECT_TYPES[t];
     const o = new WObj();
@@ -373,211 +363,15 @@ export class World {
     o.baseY = o.y = def.hover ?? 0;
     o.value = baseValueOf(def, scale) * this.cfg.mapMul;
     o.xp = xpOf(def, scale);
-    o.w = 0;
-    o.state = DORMANT;
-    o.event = true;
     this.objects.push(o);
     return o;
   }
 
-  private setupEvents(): void {
-    const tr = this.map.traffic;
-    if (tr) {
-      for (let i = 0; i < EVENTS.rush.count; i++) {
-        const o = this.eventObj(this.rng.pick(tr.types), 1, this.rng.pick([0xe84a4a, 0x3b82f6, 0xf5c542, 0x38c172, 0xffffff, 0xf08a24, 0x9b5de5]));
-        o.mv = MV_GRAPH;
-        o.graph = tr.graph;
-        o.lane = tr.lane;
-        o.speed = tr.speed * this.rng.range(0.85, 1.15);
-        this.rushPool.push(o);
-      }
-    }
-    this.ufo = this.eventObj('ufo', 0.7, 0x45e0e8);
-    this.ufo.mv = MV_RUN;
-    this.ufo.fly = true;
-    // UFO drops: golden copies of the most common small, squat prop on this map.
-    const counts = new Map<string, number>();
-    for (const s of this.map.spawns) {
-      const def = OBJECT_TYPES[typeId(s.type)];
-      const f = footprintOf(def, 1);
-      if (!s.move && f >= 0.3 && f <= 1.2 && def.h <= 1.5) counts.set(s.type, (counts.get(s.type) ?? 0) + 1);
-    }
-    const dropType = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'cone';
-    for (let i = 0; i < EVENTS.ufo.drops; i++) this.makeGolden((this.drops[i] = this.eventObj(dropType, this.rng.range(0.9, 1.3))));
-    if (this.map.id === 'farm') {
-      const animals: [string, number][] = [
-        ['cow', 4],
-        ['sheep', 4],
-        ['pig', 2],
-        ['horse', 2],
-      ];
-      for (let i = 0; i < EVENTS.stampede.count; i++) {
-        const o = this.eventObj(this.rng.weighted(animals));
-        o.mv = MV_RUN;
-        this.herd.push(o);
-      }
-    }
-    // Roll which events visit this round, then shuffle their order.
-    const kinds: EventId[] = ['ufo'];
-    if (this.rushPool.length) kinds.push('rush');
-    if (this.herd.length) kinds.push('stampede');
-    this.plan = kinds.filter((k) => this.rng.chance(EVENTS.chance[k]));
-    for (let i = this.plan.length - 1; i > 0; i--) {
-      const j = this.rng.int(0, i);
-      [this.plan[i], this.plan[j]] = [this.plan[j], this.plan[i]];
-    }
-    this.eventTimer = this.rng.range(EVENTS.firstAt[0], EVENTS.firstAt[1]);
-    this.eventsOn = this.plan.length > 0;
-  }
-
-  private activate(o: WObj, x: number, z: number): void {
-    o.x = x;
-    o.z = z;
-    o.state = ALIVE;
-    o.dirty = true;
-    o.bob = this.rng.range(0, 10);
-    if (o.mv === MV_NONE) this.grid.insert(o);
-    else this.movers.push(o);
-  }
-
-  private startEvent(id: EventId): void {
-    const h = this.main;
-    this.eventId = id;
-    const H = this.map.half - 4;
-    const clamp = (v: number) => Math.max(-H, Math.min(H, v));
-    if (id === 'rush') {
-      this.eventLeft = EVENTS.rush.duration;
-      const g = this.map.graphs[this.map.traffic!.graph];
-      for (const o of this.rushPool) {
-        if (o.state !== DORMANT) continue;
-        // Enter on a road segment out of sight of the hole.
-        let a = 0;
-        let b = 0;
-        for (let tries = 0; tries < 12; tries++) {
-          a = this.rng.int(0, g.nodes.length - 1);
-          if (!g.adj[a].length) continue;
-          b = this.rng.pick(g.adj[a]);
-          if (Math.hypot(g.nodes[a].x - h.x, g.nodes[a].z - h.z) > 30 + h.r * 4) break;
-        }
-        if (!g.adj[a].length) continue;
-        o.from = a;
-        o.to = b;
-        o.wait = this.rng.range(0, 1.5);
-        this.activate(o, g.nodes[a].x, g.nodes[a].z);
-        this.initGraphMover(o);
-      }
-    } else if (id === 'ufo') {
-      // Cross the screen sideways just beyond the hole (the camera looks from +Z), so the
-      // saucer never hides the hole and its drops land in view.
-      const u = this.ufo!;
-      const dir = this.rng.chance(0.5) ? 1 : -1;
-      const R = 46 + h.r * 3;
-      const z = clamp(h.z - (5 + h.r * 1.3 + u.f * 0.5));
-      u.tx = clamp(h.x + dir * R);
-      u.tz = z;
-      u.speed = (R * 2) / EVENTS.ufo.crossTime;
-      u.rot = dir > 0 ? 0 : Math.PI;
-      this.activate(u, clamp(h.x - dir * R), z);
-      this.eventLeft = EVENTS.ufo.crossTime + 2;
-      this.dropTimer = 0;
-    } else {
-      this.eventLeft = EVENTS.stampede.duration;
-      const dir = this.rng.chance(0.5) ? 1 : -1;
-      const R = 42 + h.r * 3;
-      const z0 = h.z + this.rng.range(-3, 3);
-      for (const o of this.herd) {
-        if (o.state !== DORMANT) continue;
-        const dz = this.rng.range(-6, 6);
-        const lag = this.rng.range(0, 10);
-        o.tx = clamp(h.x + dir * (R + 30));
-        o.tz = clamp(z0 + dz);
-        o.speed = this.rng.range(EVENTS.stampede.speed[0], EVENTS.stampede.speed[1]);
-        o.rot = dir > 0 ? 0 : Math.PI;
-        this.activate(o, clamp(h.x - dir * (R + lag)), clamp(z0 + dz));
-      }
-    }
-    this.events.push({ k: 'event', id, on: true });
-  }
-
-  private updateEvent(dt: number): void {
-    if (this.eventId === 'ufo') {
-      const u = this.ufo!;
-      if (u.state === ALIVE && Math.hypot(u.x - this.main.x, u.z - this.main.z) < 34 + this.main.r * 2) {
-        this.dropTimer -= dt;
-        const next = this.drops.find((o) => o.state === DORMANT);
-        if (next && this.dropTimer <= 0) {
-          this.dropTimer = EVENTS.ufo.dropEvery;
-          next.y = u.y + 1;
-          next.dropVy = 0;
-          this.activate(next, u.x + this.rng.range(-1, 1), u.z + this.rng.range(-1, 1));
-          this.dropping.push(next);
-        }
-      }
-    }
-    this.eventLeft -= dt;
-    const done = this.eventLeft <= 0 || (this.eventId === 'ufo' && this.ufo!.state !== ALIVE) || (this.eventId === 'stampede' && !this.herd.some((o) => o.state === ALIVE));
-    if (done) {
-      this.events.push({ k: 'event', id: this.eventId!, on: false });
-      this.eventId = null;
-      this.eventTimer = this.rng.range(EVENTS.gap[0], EVENTS.gap[1]);
-      if (!this.plan.length) this.eventsOn = false;
-    }
-  }
-
-  private updateDrops(dt: number): void {
-    const d = this.dropping;
-    for (let i = d.length - 1; i >= 0; i--) {
-      const o = d[i];
-      if (o.state !== ALIVE) {
-        d[i] = d[d.length - 1];
-        d.pop();
-        continue;
-      }
-      o.dropVy += 14 * dt;
-      o.y -= o.dropVy * dt;
-      o.dirty = true;
-      if (o.y <= o.baseY) {
-        o.y = o.baseY;
-        d[i] = d[d.length - 1];
-        d.pop();
-      }
-    }
-  }
-
-  /** MV_RUN: straight run, sidestepping solids (unless flying); leaves the stage on arrival. */
-  private updateRunner(o: WObj, dt: number): void {
-    const dx = o.tx - o.x;
-    const dz = o.tz - o.z;
-    const d = Math.hypot(dx, dz);
-    const step = o.speed * dt;
-    o.bob += dt * (4 + o.speed * 3);
-    o.dirty = true;
-    if (d <= step) {
-      o.state = DORMANT;
-      this.leaving.push(o);
-      return;
-    }
-    const ux = dx / d;
-    const uz = dz / d;
-    let nx = o.x + ux * step;
-    let nz = o.z + uz * step;
-    if (!o.fly && this.blocked(nx, nz) && !this.blocked(o.x, o.z)) {
-      // Veer around the building: try a diagonal to either side.
-      const s = (o.id & 1) * 2 - 1;
-      for (const side of [s, -s]) {
-        const ax = o.x + (ux - uz * side) * step * 0.8;
-        const az = o.z + (uz + ux * side) * step * 0.8;
-        if (!this.blocked(ax, az)) {
-          nx = ax;
-          nz = az;
-          break;
-        }
-      }
-      if (this.blocked(nx, nz)) return;
-    }
-    o.rot = lerpAngle(o.rot, Math.atan2(-(nz - o.z), nx - o.x), 1 - Math.exp(-8 * dt));
-    o.x = nx;
-    o.z = nz;
+  /** Also used by RoundEvents for the UFO drops. */
+  makeGolden(o: WObj): void {
+    o.gold = true;
+    o.value *= GOLDEN.valueMul;
+    this.golden.push(o);
   }
 
   get percentEaten(): number {
@@ -593,10 +387,6 @@ export class World {
     return Math.min(1, this.main.xp / xpForLevel(this.main.level));
   }
 
-  canEat(o: WObj, hole: WHole = this.main): boolean {
-    return o.f <= SIZE.fit * hole.r;
-  }
-
   /**
    * What the main hole can still eat this round: the props that fit now, plus the ones that would
    * fit after growing on all of those (props are taken smallest first, so one pass reaches the
@@ -609,10 +399,8 @@ export class World {
     const mega = this.abilities.mega;
     const megaUsable = this.cfg.abilities.mega.level > 0 && (mega.active > 0 || mega.cd <= this.timeLeft);
     const mouth = SIZE.fit * (megaUsable ? ABILITY_LEVEL.megaScale : 1);
-    let level = this.main.level;
-    let xp = this.main.xp;
-    let need = xpForLevel(level);
-    let r = radiusForLevel(level);
+    const grow = { level: this.main.level, xp: this.main.xp };
+    let r = radiusForLevel(grow.level);
     let fit = mouth * r;
     let count = 0;
     let cash = 0;
@@ -621,16 +409,13 @@ export class World {
       if (o.f > fit) break;
       count++;
       cash += o.value * this.cfg.cashMult;
-      xp += o.xp * this.cfg.xpMult * frontierXpMult(o.f, r);
-      while (xp >= need) {
-        xp -= need;
-        level++;
-        need = xpForLevel(level);
-        r = radiusForLevel(level);
+      grow.xp += o.xp * this.cfg.xpMult * frontierXpMult(o.f, r);
+      if (spendXp(grow)) {
+        r = radiusForLevel(grow.level);
         fit = mouth * r;
       }
     }
-    return { count, levels: level - this.main.level, cash };
+    return { count, levels: grow.level - this.main.level, cash };
   }
 
   reachableLeft(): number {
@@ -663,7 +448,8 @@ export class World {
   }
 
   // ------------------------------------------------------------ movers
-  private initGraphMover(o: WObj): void {
+  /** Also used by RoundEvents for rush hour traffic. */
+  initGraphMover(o: WObj): void {
     // Spawn sits on the centre line; snap onto the lane and head for the edge end.
     const g = this.map.graphs[o.graph];
     const a = g.nodes[o.from];
@@ -762,12 +548,12 @@ export class World {
 
   private updateMover(o: WObj, dt: number): void {
     if (o.mv === MV_RUN) {
-      this.updateRunner(o, dt);
+      this.roundEvents.updateRunner(o, dt);
       return;
     }
     const main = this.main;
     // Small things panic and run from a hole that can eat them.
-    if (o.flee && main.active && o.f <= SIZE.fit * main.r) {
+    if (o.flee && o.f <= SIZE.fit * main.r) {
       const dx = o.x - main.x;
       const dz = o.z - main.z;
       const fr = main.r * 2.2 + 3;
@@ -785,13 +571,11 @@ export class World {
         else if (!this.blocked(o.x, nz)) o.z = nz;
         o.rot = lerpAngle(o.rot, Math.atan2(-dz, dx), 1 - Math.exp(-12 * dt));
         o.bob += dt * 14;
-        o.panic = 0.4;
         this.clampToMap(o);
         o.dirty = true;
         return;
       }
     }
-    if (o.panic > 0) o.panic -= dt;
     if (o.wait > 0) {
       o.wait -= dt;
       return;
@@ -900,7 +684,6 @@ export class World {
 
   private processHole(hi: number, dt: number): void {
     const H = this.holes[hi];
-    if (!H.active) return;
     const R = H.r;
     const fit = SIZE.fit * R;
     let magR = 0;
@@ -932,7 +715,7 @@ export class World {
             if (step > 0) {
               o.x -= (dx / d) * step;
               o.z -= (dz / d) * step;
-              if (o.mv === MV_NONE) this.grid.update(o);
+              if (o.mv === MV_NONE) this.pulled.push(o);
               o.dirty = true;
             }
           }
@@ -947,6 +730,8 @@ export class World {
       }
     };
     this.grid.query(H.x, H.z, qr, visit);
+    for (const o of this.pulled) if (o.state === ALIVE) this.grid.update(o);
+    this.pulled.length = 0;
     const movers = this.movers;
     for (let i = movers.length - 1; i >= 0; i--) {
       const o = movers[i];
@@ -1007,16 +792,12 @@ export class World {
 
   gainXp(xp: number): void {
     const h = this.main;
+    const from = h.level;
     h.xp += xp;
-    let need = xpForLevel(h.level);
-    while (h.xp >= need) {
-      h.xp -= need;
-      h.level++;
-      this.levelsGained++;
-      h.baseR = radiusForLevel(h.level);
-      this.events.push({ k: 'level', level: h.level });
-      need = xpForLevel(h.level);
-    }
+    if (!spendXp(h)) return;
+    for (let l = from + 1; l <= h.level; l++) this.events.push({ k: 'level', level: l });
+    this.levelsGained += h.level - from;
+    h.baseR = radiusForLevel(h.level);
   }
 
   private updateFalling(dt: number): void {
@@ -1040,7 +821,6 @@ export class World {
         o.state = GONE;
         f[i] = f[f.length - 1];
         f.pop();
-        this.events.push({ k: 'gone', o });
       }
     }
   }
@@ -1053,17 +833,14 @@ export class World {
       this.timeLeft -= dt;
       const after = Math.ceil(this.timeLeft);
       if (after < before && after <= 5 && after >= 1) this.events.push({ k: 'tick', s: after });
-      const cleared = this.weightEaten >= this.weightTotal * 0.9995;
+      const cleared = this.weightEaten >= this.weightTotal * MAP_CLEARED_FRACTION;
       let snackedOut = false;
       if (!cleared && this.timeLeft > 0) {
         this.reachCheck -= dt;
         if (this.reachCheck <= 0) {
           this.reachCheck = ROUND_END.checkEvery;
-          if (!this.eventId && this.snackedOut()) {
-            // A random event still to come brings new snacks: start it now instead of ending.
-            if (this.eventsOn && this.plan.length && this.timeLeft > EVENTS.minLeft) this.eventTimer = 0;
-            else snackedOut = true;
-          }
+          // A random event still to come brings new snacks: start it now instead of ending.
+          if (!this.roundEvents.current && this.snackedOut() && !this.roundEvents.hurry()) snackedOut = true;
         }
       }
       if (this.timeLeft <= 0 || cleared || snackedOut) {
@@ -1103,26 +880,7 @@ export class World {
 
     const movers = this.movers;
     for (let i = 0; i < movers.length; i++) this.updateMover(movers[i], dt);
-    for (const o of this.leaving) {
-      const i = movers.indexOf(o);
-      if (i >= 0) {
-        movers[i] = movers[movers.length - 1];
-        movers.pop();
-      }
-    }
-    this.leaving.length = 0;
-    this.updateDrops(dt);
-
-    if (this.running && this.eventsOn) {
-      if (this.eventId) this.updateEvent(dt);
-      else {
-        this.eventTimer -= dt;
-        if (this.eventTimer <= 0) {
-          if (this.timeLeft > EVENTS.minLeft && this.plan.length) this.startEvent(this.plan.shift()!);
-          else this.eventsOn = false;
-        }
-      }
-    }
+    this.roundEvents.update(dt);
 
     if (this.running) {
       for (let i = 0; i < this.holes.length; i++) this.processHole(i, dt);

@@ -121,7 +121,13 @@ export class Input {
 
   /** Reads the first connected gamepad; call once per frame before vector(). */
   pollGamepad(): void {
-    const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+    let pads: readonly (Gamepad | null)[] = [];
+    try {
+      // Throws SecurityError where a Permissions-Policy blocks gamepads (e.g. an embedding iframe).
+      if (typeof navigator.getGamepads === 'function') pads = navigator.getGamepads();
+    } catch {
+      // No pad.
+    }
     this.pad = null;
     for (const p of pads) {
       if (p?.connected) {

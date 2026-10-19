@@ -98,6 +98,10 @@ export function modal(content: HTMLElement, opts: { cls?: string; dismissable?: 
     closed = true;
     const i = stack.indexOf(entry);
     if (i >= 0) stack.splice(i, 1);
+    // The box goes dead to clicks and focus while it fades, so a double click never runs an action
+    // twice. The backdrop stays hit-testable and swallows that click (close() is now a no-op), so it
+    // never falls through to the hub's buy buttons underneath.
+    box.inert = true;
     backdrop.classList.remove('show');
     setTimeout(() => backdrop.remove(), 250);
     // Return focus to the opener, or to the dialog now on top.
@@ -144,11 +148,6 @@ export function infoDialog(title: string, body: string, button = 'OK', onClick?:
 
 export function anyModalOpen(): boolean {
   return !!layer && layer.childElementCount > 0;
-}
-
-/** Number of stacked modals (including ones still fading out). */
-export function openModalCount(): number {
-  return layer ? layer.childElementCount : 0;
 }
 
 export interface PauseInfo {
@@ -221,7 +220,6 @@ export function confirmDialog(title: string, body: string, yes: string, onYes: (
 export interface RoundResult {
   cash: number;
   helperCash: number;
-  passiveCash: number;
   bonus: number;
   /** Paid for finishing early; included in `cash`. */
   timeBonus: number;

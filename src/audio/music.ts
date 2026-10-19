@@ -54,6 +54,8 @@ export class Music {
   private decoded: { style: string; track: Promise<Track | null> } | null = null;
   private current: Playing | null = null;
   private style = '';
+  /** Bumped by every setSong and stop; a load may start playback only if it is still the latest. */
+  private request = 0;
 
   constructor(
     private ctx: AudioContext,
@@ -92,11 +94,14 @@ export class Music {
   setSong(style: string): void {
     if (style === this.style) return;
     this.style = style;
+    const request = ++this.request;
     void this.load(style).then((track) => {
-      // Ignore a track that finished loading after the player moved on to another map.
-      if (!track || this.style !== style) {
+      // Ignore a load that finished after the player moved on: another map, music off, or a newer
+      // request for this same map (Farm, Moon, Farm while farm.mp3 downloads) that starts it itself.
+      if (request !== this.request) return;
+      if (!track) {
         // Failed: forget the style so the next setSong (map change, music toggle) retries.
-        if (!track && this.style === style) this.style = '';
+        this.style = '';
         return;
       }
       const ctx = this.ctx;
@@ -119,6 +124,7 @@ export class Music {
   /** Fades the music out and releases the decoded track (music turned off or muted). */
   stop(): void {
     this.style = '';
+    this.request++;
     this.decoded = null;
     this.fadeOut(this.ctx.currentTime);
   }

@@ -5,8 +5,9 @@ import {
   center,
   decorateWalks,
   faceDir,
-  natureRing,
   parkCars,
+  parkingRow,
+  ringPoints,
   shrink,
   type Area,
   type MapData,
@@ -119,10 +120,7 @@ export function generateAirport(seed: number): MapData {
   b.scatter('stairtruck', apronInner, 4);
   b.scatter('fueltruck', apronInner, 3);
   // Snacks around the start point.
-  for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    b.put(k % 2 ? 'suitcase' : 'cone', Math.cos(a) * 3.4, -24 + Math.sin(a) * 3.4, a, { force: true, tint: b.tint(PALETTE.container) });
-  }
+  for (const p of ringPoints(12, 0, -24, 3.4)) b.put(p.k % 2 ? 'suitcase' : 'cone', p.x, p.z, p.ang, { force: true, tint: b.tint(PALETTE.container) });
   for (let i = 0; i < 6; i++) b.wanderer('pilot', { x0: -8, x1: 8, z0: -32, z1: -16 }, 1.1, { flee: true });
 
   // ---------------------------------------------------------------- landside
@@ -149,12 +147,7 @@ export function generateAirport(seed: number): MapData {
     } else {
       const lot = shrink(blk, 1);
       b.rectArea(lot, '#6b7079');
-      for (let z = lot.z0 + 4; z < lot.z1 - 2; z += 9) {
-        for (let x = lot.x0 + 2; x < lot.x1 - 1; x += 3) {
-          b.rect(x, z, 0.15, 5, '#f4f4f4');
-          if (rng.chance(0.62)) b.put(rng.chance(0.85) ? 'car' : 'van', x + 1.5, z, Math.PI / 2 + (rng.chance(0.5) ? Math.PI : 0), { force: true, tint: b.tint(PALETTE.car) });
-        }
-      }
+      for (let z = lot.z0 + 4; z < lot.z1 - 2; z += 9) parkingRow(b, lot.x0 + 2, lot.x1 - 1, z, 5, 0.62);
     }
   });
   decorateWalks(b, grid, 6, (r) =>
@@ -191,7 +184,6 @@ export function generateAirport(seed: number): MapData {
     const area = (g.x1 - g.x0) * (g.z1 - g.z0);
     b.scatter(() => rng.weighted([['bush', 3], ['tree', 2], ['rock', 1]] as [string, number][]), g, Math.floor(area / 60), { scale: [0.7, 1.2] });
   }
-  natureRing(b, 158, [['bush', 1]], 400);
 
   return b.build(
     '#9fd06e',

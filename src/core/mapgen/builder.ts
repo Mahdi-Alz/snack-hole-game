@@ -51,6 +51,8 @@ export interface MapData {
   blocks: { x: number; z: number; r: number }[];
   /** Road graph and vehicle mix for the rush hour event. */
   traffic?: Traffic;
+  /** Weighted animal mix for the stampede event; maps without one get no stampede. */
+  herd?: readonly (readonly [string, number])[];
 }
 
 export interface Traffic {
@@ -111,6 +113,7 @@ export class MapBuilder {
   readonly graphs: MoveGraph[] = [];
   readonly blocks: MapData['blocks'] = [];
   traffic?: Traffic;
+  herd?: MapData['herd'];
   private placer: SpatialGrid<Circle>;
   private solids: SpatialGrid<Solid>;
   private maxR = 1;
@@ -325,6 +328,7 @@ export class MapBuilder {
       start,
       blocks: this.blocks,
       traffic: this.traffic,
+      herd: this.herd,
     };
   }
 }
@@ -513,6 +517,43 @@ export function shrink(a: Area, m: number): Area {
 
 export const center = (a: Area) => ({ x: (a.x0 + a.x1) / 2, z: (a.z0 + a.z1) / 2 });
 
+export const areaOf = (a: Area) => (a.x1 - a.x0) * (a.z1 - a.z0);
+
+/** `n` evenly spaced points on a circle of radius `r` around (x, z), the first on the +X side. */
+export function ringPoints(n: number, x: number, z: number, r: number): { k: number; ang: number; x: number; z: number }[] {
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const ang = (k / n) * Math.PI * 2;
+    out.push({ k, ang, x: x + Math.cos(ang) * r, z: z + Math.sin(ang) * r });
+  }
+  return out;
+}
+
+/**
+ * The four strips between a square core (|x| and |z| up to `edge`) and the map border, 1 m in from
+ * it: north and south span the full width, west and east fill the gap between them.
+ */
+export function ringStrips(b: MapBuilder, edge: number): [north: Area, south: Area, west: Area, east: Area] {
+  const H = b.size / 2 - 1;
+  return [
+    { x0: -H, x1: H, z0: -H, z1: -edge },
+    { x0: -H, x1: H, z0: edge, z1: H },
+    { x0: -H, x1: -edge, z0: -edge, z1: edge },
+    { x0: edge, x1: H, z0: -edge, z1: edge },
+  ];
+}
+
+/**
+ * A row of parking bays along X at `z`: a stripe of length `stripe` every 3 m from `x0` while
+ * x < `x1`, each bay holding a car or van (nose to +Z or -Z) at chance `fill`.
+ */
+export function parkingRow(b: MapBuilder, x0: number, x1: number, z: number, stripe: number, fill: number): void {
+  for (let x = x0; x < x1; x += 3) {
+    b.rect(x, z, 0.15, stripe, '#f4f4f4');
+    if (b.rng.chance(fill)) b.put(b.rng.chance(0.85) ? 'car' : 'van', x + 1.5, z, Math.PI / 2 + (b.rng.chance(0.5) ? Math.PI : 0), { force: true, tint: b.tint(PALETTE.car) });
+  }
+}
+
 /** Rotation that makes a building's front (+X) face direction (dx, dz). */
 export function faceDir(dx: number, dz: number): number {
   return Math.atan2(-dz, dx);
@@ -520,10 +561,7 @@ export function faceDir(dx: number, dz: number): number {
 
 /** Ring of cones, barriers and hydrants around the map start so the first seconds are full of snacks. */
 export function startSnacks(b: MapBuilder, hw: number, x = 0, z = 0): void {
-  for (let k = 0; k < 10; k++) {
-    const ang = (k / 10) * Math.PI * 2;
-    b.put('cone', x + Math.cos(ang) * 3.2, z + Math.sin(ang) * 3.2, 0, { force: true });
-  }
+  for (const p of ringPoints(10, x, z, 3.2)) b.put('cone', p.x, p.z, 0, { force: true });
   b.put('barrier', x, z - hw + 1.4, 0, { force: true });
   b.put('barrier', x, z + hw - 1.4, 0, { force: true });
   for (const [dx, dz] of [
@@ -570,15 +608,5 @@ export function fieldPaint(b: MapBuilder, a: Area, colors: string[], stripe = 2.
 
 /** Dense nature ring between the playable core and the map edge. */
 export function natureRing(b: MapBuilder, edge: number, types: [string, number][], density: number, scale: [number, number] = [0.7, 1.4]): void {
-  const H = b.size / 2 - 1;
-  const strips: Area[] = [
-    { x0: -H, x1: H, z0: -H, z1: -edge },
-    { x0: -H, x1: H, z0: edge, z1: H },
-    { x0: -H, x1: -edge, z0: -edge, z1: edge },
-    { x0: edge, x1: H, z0: -edge, z1: edge },
-  ];
-  for (const s of strips) {
-    const area = (s.x1 - s.x0) * (s.z1 - s.z0);
-    b.scatter(() => b.rng.weighted(types), s, Math.floor(area / density), { scale });
-  }
+  for (const s of ringStrips(b, edge)) b.scatter(() => b.rng.weighted(types), s, Math.floor(areaOf(s) / density), { scale });
 }

@@ -40,7 +40,7 @@ the first upgrade is bought ~30–40 s after starting.
 ## Size & objects
 
 - Radius `R(L) = 0.75 * 1.125^L`. L starts at Starting Size + Dense Core − the map's size offset −
-  the Singularity tier, and every round begins with half the XP of its first level.
+  the Singularity tier (at most 10), and every round begins with half the XP of its first level.
 - XP for L → L+1: `8 * R(L)^2 * min(1, (L + 2) / 6)`. A prop gives `f^2` XP, times
   `1 + 3 * (f / 0.9R)^3` for props close to the size limit. Equal exponents keep the number of
   your-size props per level constant, so growth runs at a steady ~4–6 s per level instead of
@@ -166,7 +166,7 @@ its best %; reaching 100% gives a permanent +25% cash (kept through prestige).
 - Dark Matter comes from lifetime cash: `DM total = floor(1.75 * (lifetimeCash / 1e6)^0.25)`, and a
   Singularity pays what has not been claimed yet. Doubling DM needs ~16x the cash, and collapsing
   again at the same point pays nothing, so runs must push further. The panel shows the gain, its
-  % of the DM you hold, the income multiplier after reset, and a hint once the gain is +50%.
+  % of all DM earned so far, the income multiplier after reset, and a hint once the gain is +50%.
 - Resets cash, upgrades, helpers, abilities, maps (Wormhole keeps maps), map goals and recent
   income. Keeps DM, DM tree, records, Gulpedia, trophies, 100% bonuses, skins, tier.
 - Every DM ever earned gives +10% cash forever (spending does not reduce it).
@@ -200,7 +200,7 @@ Singularity (recent income starts low again). Time with the tab hidden counts th
 
 `npm run sim` plays real rounds with a greedy bot (same World + map generators) that shops
 cheapest-first (Head Start cash before a run's first round) and collapses once the DM gain is
-+50% of what it holds and progress has stalled (the next map needs a Singularity, or 4 rounds
++50% of all DM it has earned and progress has stalled (the next map needs a Singularity, or 4 rounds
 without a better size). `--human` = slower re-targeting, 80% stick input, rare ability use and
 20 s per shop visit. `--report` checks the pacing targets (PASS/FAIL), `--trace` prints each
 round's level-up times, `--seed` changes the world seeds.
@@ -208,28 +208,30 @@ round's level-up times, `--seed` changes the world seeds.
 | Event (human model) | Time |
 |---|---|
 | Growth Rate, Magnet | 3:20 |
-| Happy Farm, first helper | 7:40 |
-| Downtown | 19:40 |
-| Harbor | 33:20 |
-| first Singularity (+7 DM) | 43:17 |
-| Airport (run 2) | 1h 04m |
+| Happy Farm | 6:10 |
+| first helper | 7:40 |
+| Downtown | 18:00 |
+| Harbor | 31:39 |
+| first Singularity (+7 DM) | 41:38 |
+| Airport (run 2) | 1h 01m |
 | Moon Base (run 4) | 2h 11m |
-| first tier (run 4 collapse) | 2h 27m |
+| first tier (run 4 collapse) | 2h 41m |
 
-Targets met in the latest report (13/17): first size-up ≤ 5 s (3.4 s), 4–8 s per level (4.1 s),
-last level ≤ 1.5x the first (0.92x; the first size-up is scaled to a full level's XP), no dead
-time, 1–3 purchases per shop visit (3), 93% of visits buy something or can after one more round
-(counting cash left over), Starting Size costing 0.3–1.5 rounds (0.50), 5–8 rounds per map in
-run 1 (6, 7, 7), first Singularity at 43 min, run 2 back to Harbor in 47% of run 1's time, DM per
-run growing at most x2 (7, 5, 6, 9, 15, 28), all maps at 2h 11m, 8 h offline = 4 rounds.
-`--seed 2` gives the same 13. Misses: radius growth per round 6.6x (target 3–5x, which needs
+Targets met in the latest report (12/17): first size-up ≤ 5 s (3.5 s), 4–8 s per level (4.1 s),
+last level ≤ 1.5x the first (1.05x; the first size-up is scaled to a full level's XP), no dead
+time, 1–3 purchases per shop visit (2), Starting Size costing 0.3–1.5 rounds (0.73), 4–8 rounds
+per map in run 1 (5, 7, 7), first Singularity at 42 min, run 2 back to Harbor in 43% of run 1's
+time, DM per run growing at most x2 (7, 7, 7, 11, 16, 30), all maps at 2h 11m, 8 h offline = 4
+rounds. `--seed 2` gives 13 and `--seed 3` 12; any change to the sim's random draws reshuffles
+which borderline targets pass. Misses: radius growth per round 7.4x (target 3–5x, which needs
 7+ s per level in a 100 s round, and Downtown/Harbor goals sit 16–20 sizes above their entry
-level); cheapest option left 0.43 rounds of income (target 1–3: run 1 income doubles every round
-across ~10 open tracks and later runs buy 10–30 levels per visit on the early maps); run 3
-reaches the Airport in 91% of run 2's time (target 25–55%: each run adds only ~+50% DM, about
-1.3x income, and both runs clear the early maps at about one round per map); skill band
-1.15–1.77x (target 1.5–3: a 1.4-skill bot gains only 0.5–2 more sizes per round than a 0.6-skill
-one, so the band is mostly round-to-round noise).
+level); 85% of visits buy something or can after one more round, counting cash left over
+(target 90%; 85–90% across seeds 1–3); cheapest option left 0.71 rounds of income (target 1–3:
+run 1 income doubles every round across ~10 open tracks and later runs buy 10–30 levels per visit
+on the early maps); run 3 reaches the Airport in 78% of run 2's time (target 25–55%: each run
+adds only ~+50% DM, about 1.3x income, and both runs clear the early maps at about one round per
+map); skill band 1.22–1.48x (target 1.5–3: a 1.4-skill bot gains only 0.5–2 more sizes per round
+than a 0.6-skill one, so the band is mostly round-to-round noise).
 
 ## Architecture
 
@@ -240,7 +242,9 @@ src/
     format.ts      number formatting (K, M, B, T, Qa, Qi, scientific)
     economy.ts     costs, effects, map unlocks, offline, prestige and tiers, round config
     save.ts        versioned save, migration, defaults
+    round.ts       settleRound: books a finished round into the save (game and sim share it)
     world.ts       round simulation: holes, swallowing, movers, combo, abilities, early finish
+    roundEvents.ts rush hour, UFO fly-by and stampede (staged off-stage, run one at a time)
     mapgen/        seeded procedural maps (builder + one generator per map, ladder.ts fills
                    size-ladder gaps)
     bot.ts         greedy steering (sim + hub attract mode)
@@ -259,13 +263,20 @@ src/
                gaplessly, cross-faded on map change, quieter in the hub, ducked while paused
   dev/         dev-only URL testing flags (?mute, ?fresh, ?save=NAME, ?seed=N) and fixture saves
   game.ts      state machine (hub → round → results), autosave (with the running round's cash),
-               offline, purchases, import / backup / restore, one saving tab, crash guard
+               offline, purchases, crash guard
+  persistence.ts  SaveStore: localStorage (memory for dev test saves), backup, damaged-save copy,
+               one saving tab, warning when the browser refuses a write
+  round-fx.ts  RoundFeedback: world events → sounds, particles, banners, floaters, shake,
+               landmark slow-motion, results screen
+  settings-flow.ts  settings dialog wiring: apply, export, import, restore backup, reset
   pwa.ts       service worker registration (release builds); service-worker.js is the template
                vite.config.ts turns into dist/sw.js
 tests/         vitest: format, economy, shop (helpers, abilities, trophies, offline edges), save
-               validation, world/mapgen, map size ladders
+               validation, round settlement, world/mapgen, pinned map layouts, events, prop
+               builders, map size ladders
 scripts/       sim.ts (balance), smoke.mjs / shots.mjs / ui-shots.mjs (Playwright screenshots),
-               devServer.mjs (each script starts its own Vite unless given a URL)
+               profile.mjs (frame timings), devServer.mjs (each script starts its own Vite
+               unless given a URL)
 ```
 
 ### Rendering notes

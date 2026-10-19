@@ -41,7 +41,7 @@ import {
 } from '../core/economy';
 import { formatCash, formatNumber, formatPercent, formatRate } from '../core/format';
 import type { SaveData } from '../core/save';
-import { thumbFor } from '../render/thumbs';
+import { thumbInto } from '../render/thumbs';
 import { card, lockedCard, section, type Card } from './cards';
 import { h } from './dom';
 
@@ -90,7 +90,7 @@ function upgradesTab(api: HubApi, cards: Card[]): HTMLElement {
   let teaser = false;
   for (const d of UPGRADES) {
     if (!isUpgradeVisible(s, d)) {
-      if (!teaser && !d.needsHelper) {
+      if (!teaser) {
         teaser = true;
         root.appendChild(lockedCard(d.icon, d.name, `Earn ${cost(d.unlockAt)} total to unlock.`));
       }
@@ -332,7 +332,7 @@ function gulpediaTab(api: HubApi): HTMLElement {
         h(
           'div',
           { class: `gulp-item ${n > 0 ? '' : 'unknown'}`, title: n > 0 ? `${def.name} — eaten ${formatNumber(n)}` : 'Not discovered yet' },
-          n > 0 ? h('img', { src: thumbFor(t), alt: def.name }) : h('div', { class: 'gulp-q' }, '?'),
+          n > 0 ? thumbInto(h('img', { alt: def.name }), t) : h('div', { class: 'gulp-q' }, '?'),
           h('div', { class: 'gulp-name' }, n > 0 ? def.name : '???'),
           n > 0 ? h('div', { class: 'gulp-count' }, `×${formatNumber(n)}`) : null,
         ),

@@ -11,13 +11,13 @@
  *   npm run sim -- --seed 7          # different (but reproducible) world seeds
  */
 import { ABILITIES, DM_UPGRADES, HELPERS, MAPS, SIZE, UPGRADES, type MapId } from '../src/config/balance';
-import { OBJECT_TYPES } from '../src/config/objects';
 import { checkAchievements } from '../src/core/achievements';
 import { Bot } from '../src/core/bot';
 import * as eco from '../src/core/economy';
 import { formatDuration, formatNumber } from '../src/core/format';
 import { generateMap } from '../src/core/mapgen';
 import { Rng } from '../src/core/rng';
+import { settleRound, summarizeRound } from '../src/core/round';
 import { defaultSave, type SaveData } from '../src/core/save';
 import { World } from '../src/core/world';
 
@@ -50,6 +50,7 @@ const withSkill = (s: number): Profile => ({ ...BASE, bot: BASE.bot * s, stick: 
 
 interface RoundStats {
   map: MapId;
+  /** Round cash; when the round is recorded, what the game credits (with the warm-up top-up). */
   cash: number;
   pct: number;
   startLevel: number;
@@ -61,6 +62,8 @@ interface RoundStats {
   deadTime: number;
   /** Seconds actually played (shorter than roundTime if the round ended early). */
   played: number;
+  /** Maps the recorded round unlocked. */
+  unlocked: MapId[];
 }
 
 function playRound(save: SaveData, p: Profile, record = true): RoundStats {
@@ -78,7 +81,7 @@ function playRound(save: SaveData, p: Profile, record = true): RoundStats {
     for (const e of w.events) {
       if (e.k === 'level') levelTimes.push(w.time);
       else if (e.k === 'eat' && e.hole === 0) lastEat = w.time;
-      else if ((e.k === 'timeUp' || e.k === 'cleared') && !endAt) endAt = w.time;
+      else if ((e.k === 'timeUp' || e.k === 'cleared' || e.k === 'snackedOut') && !endAt) endAt = w.time;
     }
     w.events.length = 0;
   }
@@ -93,23 +96,15 @@ function playRound(save: SaveData, p: Profile, record = true): RoundStats {
     levelTimes,
     deadTime: Math.max(0, endAt - lastEat),
     played: endAt,
+    unlocked: [],
   };
   if (!record) return stats;
-  const s = save;
-  eco.earn(s, w.cash);
-  s.stats.rounds++;
-  s.stats.totalEaten += w.eaten + w.helperEaten;
-  s.stats.bestCombo = Math.max(s.stats.bestCombo, w.comboBest);
-  s.stats.bestLevel = Math.max(s.stats.bestLevel, w.main.level + 1);
-  s.stats.bestRoundCash = Math.max(s.stats.bestRoundCash, w.cash);
-  for (const [t, n] of w.eatenByType) s.gulpedia[OBJECT_TYPES[t].id] = (s.gulpedia[OBJECT_TYPES[t].id] ?? 0) + n;
-  s.mapBest[save.selectedMap] = Math.max(s.mapBest[save.selectedMap], w.percentEaten);
-  eco.noteRound(s, save.selectedMap, w.main.level, w.cash);
-  if (w.percentEaten >= 0.9995 && !s.map100[save.selectedMap]) {
-    s.map100[save.selectedMap] = true;
-    mark(`100-${save.selectedMap}-${currentRun}`, `100% of ${save.selectedMap}!`);
-  }
-  checkAchievements(s);
+  // The same bookkeeping as the game's end of round (warm-up top-up, records, map unlocks).
+  const settled = settleRound(save, summarizeRound(w));
+  stats.cash = settled.total;
+  stats.unlocked = settled.unlockedMaps;
+  if (settled.completed) mark(`100-${stats.map}-${currentRun}`, `100% of ${stats.map}!`);
+  checkAchievements(save);
   return stats;
 }
 
@@ -132,14 +127,6 @@ function options(s: SaveData): Option[] {
     out.push({ name: `${a.name} ${s.abilities[a.id] === 0 ? 'unlock' : 'level'}`, key: `a-${a.id}-${s.abilities[a.id] === 0 ? 0 : 1}`, cost: eco.abilityCost(a.id, s.abilities[a.id], s.tier), buy: () => eco.buyAbility(s, a.id) });
   }
   return out;
-}
-
-/** Unlocks every map whose goal was reached and switches to the newest. */
-function tryMap(s: SaveData): void {
-  for (const id of eco.unlockMaps(s)) {
-    s.selectedMap = id;
-    mark(`map-${id}-${currentRun}`, `unlock map ${eco.mapDef(id).name}`);
-  }
 }
 
 interface ShopStats {
@@ -170,7 +157,6 @@ function buyAffordable(s: SaveData): number {
 }
 
 function shop(s: SaveData, lastRoundCash: number): ShopStats {
-  tryMap(s);
   const purchases = buyAffordable(s);
   const inc = Math.max(1, lastRoundCash);
   const cheapest = Math.min(Infinity, ...options(s).map((o) => o.cost));
@@ -261,12 +247,13 @@ for (let run = 1; run <= RUNS; run++) {
     if (row.rounds === 1) mark(`first-${run}`, `round 1 done: $${formatNumber(r.cash)}`);
     if (VERBOSE || row.rounds % 5 === 0)
       events.push(
-        `${formatDuration(clock).padStart(7)}    r${row.rounds} ${save.selectedMap} $${formatNumber(r.cash)} L${r.startLevel + 1}->L${r.endLevel + 1} ${(r.pct * 100).toFixed(1)}% cash ${formatNumber(save.cash)} mult x${eco.globalCashMult(save).toFixed(1)} up ${Object.values(save.upgrades).join(',')}`,
+        `${formatDuration(clock).padStart(7)}    r${row.rounds} ${r.map} $${formatNumber(r.cash)} L${r.startLevel + 1}->L${r.endLevel + 1} ${(r.pct * 100).toFixed(1)}% cash ${formatNumber(save.cash)} mult x${eco.globalCashMult(save).toFixed(1)} up ${Object.values(save.upgrades).join(',')}`,
       );
     if (TRACE)
       events.push(
-        `            trace ${save.selectedMap} L${r.startLevel + 1}->L${r.endLevel + 1} in ${r.played.toFixed(0)}/${r.roundTime}s dead ${r.deadTime.toFixed(0)}s: ${r.levelTimes.map((t) => t.toFixed(0)).join(' ')}`,
+        `            trace ${r.map} L${r.startLevel + 1}->L${r.endLevel + 1} in ${r.played.toFixed(0)}/${r.roundTime}s dead ${r.deadTime.toFixed(0)}s: ${r.levelTimes.map((t) => t.toFixed(0)).join(' ')}`,
       );
+    for (const id of r.unlocked) mark(`map-${id}-${run}`, `unlock map ${eco.mapDef(id).name}`);
     const sh = shop(save, r.cash);
     rounds.push({ ...r, ...sh, run, round: row.rounds, clock });
     const now = bestMap(save);
@@ -334,7 +321,7 @@ function report(): void {
   );
   check('last level / first level time (median)', `${fmt(lastOverFirst, 2)}x`, lastOverFirst <= 1.5);
 
-  const growth = median(play.map((r) => Math.pow(1.125, r.endLevel - r.startLevel)));
+  const growth = median(play.map((r) => Math.pow(SIZE.radiusGrowth, r.endLevel - r.startLevel)));
   check('radius growth per round (median)', `${fmt(growth, 2)}x`, growth >= 3 && growth <= 5);
 
   const dead = play.map((r) => r.deadTime);

@@ -65,6 +65,18 @@ describe('loading untrusted saves', () => {
     expect(s.settings.volume).toBe(0.3);
   });
 
+  it('keeps default records where the save holds null or an array', () => {
+    for (const bad of [null, [], [3]]) {
+      const s = edited({ stats: bad, upgrades: bad, dmUpgrades: bad, settings: bad, mapBest: bad, maps: bad });
+      expect(s.stats).toEqual(defaultSave(0).stats);
+      expect(s.upgrades).toEqual(defaultSave(0).upgrades);
+      expect(s.dmUpgrades).toEqual(defaultSave(0).dmUpgrades);
+      expect(s.settings).toEqual(defaultSave(0).settings);
+      expect(s.maps.suburb).toBe(true);
+      expect(buildRoundConfig(s).startLevel).toBe(buildRoundConfig(defaultSave(0)).startLevel);
+    }
+  });
+
   it('falls back to safe settings', () => {
     const s = edited({ settings: { volume: 7, quality: 'ultra', shake: 'no' } });
     expect(s.settings.volume).toBe(1);

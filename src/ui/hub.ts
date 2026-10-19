@@ -10,7 +10,6 @@ import { TABS, renderTab, type HubApi, type TabId } from './tabs';
 export class Hub {
   readonly root: HTMLDivElement;
   private cash: HTMLDivElement;
-  private rate: HTMLDivElement;
   private dm: HTMLDivElement;
   private tabBar: HTMLDivElement;
   private content: HTMLDivElement;
@@ -31,7 +30,6 @@ export class Hub {
     private api: HubApi,
   ) {
     this.cash = h('div', { class: 'top-cash' });
-    this.rate = h('div', { class: 'top-rate' });
     this.dm = h('div', { class: 'top-dm' });
     const settings = h('button', { class: 'icon-btn', title: 'Settings', 'aria-label': 'Settings', onclick: () => this.onSettings?.() }, '⚙️');
     this.tabBar = h('div', { class: 'tab-bar', role: 'tablist', 'aria-label': 'Shop' });
@@ -47,7 +45,7 @@ export class Hub {
         'div',
         { class: 'topbar' },
         h('div', { class: 'brand' }, h('span', { class: 'brand-hole' }), h('span', { class: 'brand-text' }, 'Snack Hole')),
-        h('div', { class: 'top-stats' }, h('div', { class: 'top-cash-wrap' }, this.cash, this.rate), this.dm),
+        h('div', { class: 'top-stats' }, h('div', { class: 'top-cash-wrap' }, this.cash), this.dm),
         settings,
       ),
       h('div', { class: 'play-area' }, this.playMap, this.playBtn, this.playInfo),
@@ -151,7 +149,6 @@ export class Hub {
     this.acc = 0;
     this.lastCash = s.cash;
     setText(this.cash, formatCash(s.cash));
-    setText(this.rate, '');
     setText(this.dm, s.dmTotal > 0 || s.dm > 0 ? `🌑 ${formatNumber(s.dm)} DM` : '');
     toggleClass(this.dm, 'hidden', !(s.dmTotal > 0 || s.dm > 0));
     const m = mapDef(s.selectedMap);
@@ -164,12 +161,6 @@ export class Hub {
         : `${roundTimeFor(s)}s · start size ${startLevel(s) + 1} · ${goalText(s)}`,
     );
     for (const c of this.cards) c.update();
-    // Highlight tabs with something affordable.
-    for (const [id, b] of this.tabButtons) toggleClass(b, 'has-buy', id !== this.tab && this.tabHasAffordable(id));
-  }
-
-  private tabHasAffordable(_id: TabId): boolean {
-    return false;
   }
 }
 

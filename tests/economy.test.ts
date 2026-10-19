@@ -280,6 +280,14 @@ describe('prestige', () => {
     expect(applyPrestige(n).tier).toBe(1);
   });
 
+  it('tier bonuses never lose a Dark Matter to float error', () => {
+    const s = unlocked();
+    s.tier = 4;
+    earn(s, lifetimeForDm(45) * 1.0001);
+    // 45 * 1.4 is 62.999… in floating point.
+    expect(dmGain(s)).toBe(Math.round(45 * (1 + PRESTIGE.tierDmBonus * 4)));
+  });
+
   it('wormhole keeps maps and head start grants cash', () => {
     const s = unlocked();
     s.dmUpgrades.wormhole = 1;

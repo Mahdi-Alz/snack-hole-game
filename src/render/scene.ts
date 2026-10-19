@@ -55,8 +55,11 @@ export class GameRenderer {
   private camInit = false;
   private shakeAmt = 0;
   private time = 0;
+  /** Real seconds of the last frame (noteFrame), unscaled by slow-motion and ticking while paused. */
+  private frameDt = 1 / 60;
   private shadowsOn = true;
-  private sunOffset = new THREE.Vector3(-45, 80, 35);
+  /** Direction from the view target to the sun. */
+  private readonly sunDir = new THREE.Vector3(-45, 80, 35).normalize();
   private scratch = new THREE.Vector3();
   private quality: Quality = 'auto';
   /** Pixel ratio cap from auto quality (steps down while frames run slow). */
@@ -118,6 +121,7 @@ export class GameRenderer {
    * another screen).
    */
   noteFrame(dt: number): void {
+    this.frameDt = dt;
     if (window.devicePixelRatio !== this.dpr) {
       this.dpr = window.devicePixelRatio;
       this.resize();
@@ -139,13 +143,14 @@ export class GameRenderer {
     return max;
   }
 
-  get mapData(): MapData | null {
-    return this.map;
-  }
-
   setShadows(on: boolean): void {
     this.shadowsOn = on;
     this.sun.castShadow = on;
+    // Frees the shadow map (up to 2048²); three.js makes a new one when shadows come back on.
+    if (!on && this.sun.shadow.map) {
+      this.sun.shadow.map.dispose();
+      this.sun.shadow.map = null;
+    }
     this.objects.setShadows(on);
   }
 
@@ -259,7 +264,7 @@ export class GameRenderer {
       for (let i = 0; i < n; i++) {
         const h = world.holes[i];
         holeUniforms.uHoles.value[i].set(h.x, h.z, h.r, 0);
-        this.holeViews[i]?.update(h.x, h.z, h.r, this.time, h.active);
+        this.holeViews[i]?.update(h.x, h.z, h.r, this.time, true, this.frameDt);
       }
       for (let i = n; i < this.holeViews.length; i++) this.holeViews[i].group.visible = false;
       holeUniforms.uFadeDepth.value = Math.max(2, world.main.r * 1.6);
@@ -381,8 +386,9 @@ export class GameRenderer {
     cam.near = 1;
     cam.far = 400 + d * 2;
     cam.updateProjectionMatrix();
-    const off = this.sunOffset.clone().normalize().multiplyScalar(150 + d);
-    this.sun.position.set(t.x + off.x, off.y, t.z + off.z);
+    const sd = this.sunDir;
+    const sk = 150 + d;
+    this.sun.position.set(t.x + sd.x * sk, sd.y * sk, t.z + sd.z * sk);
     this.sun.target.position.set(t.x, 0, t.z);
   }
 }

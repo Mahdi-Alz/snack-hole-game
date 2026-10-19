@@ -9,7 +9,7 @@ import { fillLadder } from './ladder';
 import { generateMoon } from './moon';
 import { generateSuburb } from './suburb';
 
-const GENERATORS: Partial<Record<MapId, (seed: number) => MapData>> = {
+const GENERATORS: Record<MapId, (seed: number) => MapData> = {
   suburb: generateSuburb,
   downtown: generateDowntown,
   farm: generateFarm,
@@ -25,9 +25,7 @@ export function generateMap(id: MapId): MapData {
   let m = cache.get(id);
   if (!m) {
     const def = MAPS.find((d) => d.id === id)!;
-    const gen = GENERATORS[id] ?? generateSuburb;
-    m = gen(def.seed);
-    m.id = id;
+    m = GENERATORS[id](def.seed);
     fillLadder(m);
     cache.set(id, m);
   }

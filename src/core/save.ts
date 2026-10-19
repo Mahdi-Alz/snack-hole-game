@@ -160,6 +160,8 @@ function isObj(v: unknown): v is Record<string, unknown> {
  */
 function mergeInto<T>(def: T, src: unknown): T {
   if (!isObj(def) || !isObj(src)) {
+    // A record default never takes a non-record (`typeof null` and arrays are 'object' too).
+    if (isObj(def)) return def;
     if (typeof def === 'number') return (typeof src === 'number' && Number.isFinite(src) && src >= 0 ? src : def) as T;
     if (typeof def === typeof src && !Array.isArray(def)) return src as T;
     if (Array.isArray(def) && Array.isArray(src)) return src as T;

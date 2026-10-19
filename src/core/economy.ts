@@ -128,10 +128,6 @@ export function upgradeCost(id: UpgradeId, level: number, tier = 0): number {
   return geomCost(d.base, d.growth, level) * tierCostMul(tier);
 }
 
-export function upgradeMaxed(save: SaveData, id: UpgradeId): boolean {
-  return save.upgrades[id] >= upgradeDef(id).max;
-}
-
 /** Human-readable effect of an upgrade at a given level. */
 export function upgradeEffectText(id: UpgradeId, level: number): string {
   switch (id) {
@@ -157,7 +153,6 @@ export function upgradeEffectText(id: UpgradeId, level: number): string {
 }
 
 export function isUpgradeVisible(save: SaveData, d: UpgradeDef): boolean {
-  if (d.needsHelper && save.helpers <= 0) return false;
   return save.runCash >= d.unlockAt || save.upgrades[d.id] > 0 || save.stats.prestiges > 0;
 }
 
@@ -299,7 +294,8 @@ export function prestigeUnlocked(save: SaveData): boolean {
 export function dmGain(save: SaveData): number {
   if (!prestigeUnlocked(save)) return 0;
   const base = dmForLifetime(save.lifetimeCash) - save.dmClaimed;
-  return base > 0 ? Math.floor(base * tierDmMult(save.tier)) : 0;
+  // The epsilon keeps float error (45 * 1.4 = 62.999…) from costing a whole Dark Matter.
+  return base > 0 ? Math.floor(base * tierDmMult(save.tier) + 1e-9) : 0;
 }
 
 /** Whether this run reached the Moon Base goal, which raises the tier on the next Singularity. */

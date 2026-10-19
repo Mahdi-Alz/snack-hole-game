@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { OBJECT_TYPES } from '../config/objects';
 import { createPropMaterial } from './materials';
 import { geometryFor } from './objectsView';
 
 let renderer: THREE.WebGLRenderer | null = null;
+/** Set once creating the offscreen renderer failed (no WebGL): later thumbs return '' at once. */
+let initFailed = false;
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let mesh: THREE.InstancedMesh;
@@ -12,6 +13,10 @@ const cache = new Map<string, string>();
 const SIZE = 96;
 const DEFAULT_TINT = 0xff6b6b;
 const key = (t: number, tint: number) => `${t}:${tint}`;
+/** Transparent 1x1 GIF shown until a thumbnail is rendered. */
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+/** Thumbnails thumbInto renders per animation frame. */
+const PER_FRAME = 3;
 
 function init(): void {
   const canvas = document.createElement('canvas');
@@ -28,12 +33,22 @@ function init(): void {
   camera = new THREE.PerspectiveCamera(30, 1, 0.1, 2000);
 }
 
-/** Data URL thumbnail of a prop type, rendered once with an offscreen renderer. */
+/** Data URL thumbnail of a prop type, rendered once with an offscreen renderer ('' if it cannot). */
 export function thumbFor(t: number, tint = DEFAULT_TINT): string {
   const hit = cache.get(key(t, tint));
   if (hit) return hit;
+  if (initFailed) return '';
+  if (!renderer) {
+    try {
+      init();
+    } catch {
+      initFailed = true;
+      renderer = null;
+      return '';
+    }
+  }
+  const r = renderer!;
   try {
-    if (!renderer) init();
     const geo = geometryFor(t);
     if (mesh) scene.remove(mesh);
     mesh = new THREE.InstancedMesh(geo, createPropMaterial(), 1);
@@ -51,20 +66,16 @@ export function thumbFor(t: number, tint = DEFAULT_TINT): string {
     camera.far = dist * 4;
     camera.updateProjectionMatrix();
     camera.lookAt(center);
-    renderer!.render(scene, camera);
-    const url = renderer!.domElement.toDataURL('image/png');
-    cache.set(key(t, tint), url);
+    r.render(scene, camera);
+    // A lost context draws nothing: return '' rather than cache a blank image for good.
+    const url = r.getContext().isContextLost() ? '' : r.domElement.toDataURL('image/png');
+    if (url) cache.set(key(t, tint), url);
     (mesh.material as THREE.Material).dispose();
     mesh.dispose();
     return url;
   } catch {
     return '';
   }
-}
-
-export function thumbForId(id: string): string {
-  const t = OBJECT_TYPES.findIndex((o) => o.id === id);
-  return t >= 0 ? thumbFor(t) : '';
 }
 
 const queue: number[] = [];
@@ -90,4 +101,42 @@ export function cachedThumb(t: number): string {
   if (hit) return hit;
   prewarmThumbs([t]);
   return '';
+}
+
+/** Images waiting for a type's thumbnail, in request order. */
+const waiting = new Map<number, HTMLImageElement[]>();
+let drawing = false;
+
+/**
+ * Gives `img` the type's thumbnail without blocking: the cached one at once, otherwise a blank
+ * placeholder now and the thumbnail a few frames later. Returns `img`.
+ */
+export function thumbInto(img: HTMLImageElement, t: number): HTMLImageElement {
+  const hit = cache.get(key(t, DEFAULT_TINT));
+  img.src = hit ?? BLANK;
+  if (hit || initFailed) return img;
+  const list = waiting.get(t);
+  if (list) list.push(img);
+  else waiting.set(t, [img]);
+  if (!drawing) {
+    drawing = true;
+    requestAnimationFrame(drawWaiting);
+  }
+  return img;
+}
+
+function drawWaiting(): void {
+  let drawn = 0;
+  for (const [t, imgs] of waiting) {
+    if (drawn >= PER_FRAME) break;
+    waiting.delete(t);
+    // The panel may have been rebuilt meanwhile: only images still on the page need it.
+    const live = imgs.filter((img) => img.isConnected);
+    if (live.length === 0) continue;
+    const url = thumbFor(t);
+    drawn++;
+    if (url) for (const img of live) img.src = url;
+  }
+  if (waiting.size > 0) requestAnimationFrame(drawWaiting);
+  else drawing = false;
 }
