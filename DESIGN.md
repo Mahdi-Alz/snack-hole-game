@@ -185,12 +185,16 @@ its best %; reaching 100% gives a permanent +25% cash (kept through prestige).
 - Every DM ever earned gives +10% cash forever (spending does not reduce it).
 - DM tree: Event Horizon (+25% cash), Dense Core (+1 start size), Head Start
   (start with $300 × 10^(lvl−1)), Quantum Helpers (+10% helper radius and speed), Gravity Well
-  (+1 magnet level), Hawking Radiation (+2 h offline cap), Wormhole (keep maps, 40 DM).
+  (+1 magnet level), Hawking Radiation (+2 h offline cap), Wormhole (keep maps, 40 DM). The rest
+  of the tree costs ~16K DM, maxed around tier 12. Dense Core goes to level 20 on the same
+  `3 * 1.7^lvl` curve: levels 11–20 cost 605 to 71.7K DM (173K in all), the late-game DM sink,
+  bought out around tier 17–18.
 - **Endless tiers.** A Singularity after a run that reached the Moon Base goal raises the tier:
   every map starts 1 size smaller per tier up to 10 sizes (tier 10), map payouts and all cash
   prices scale x4 per tier, and DM gains are x(1 + 0.1 × tier). Past tier 10 a tier only scales
-  the numbers, so with maxed Starting Size and Dense Core Moon Base still starts 15 sizes below its
-  goal (uncapped it would start at size 1 from about tier 20). Tiers 1, 3, 5 and 10 unlock skins
+  the numbers, so with maxed Starting Size and Dense Core Moon Base still starts 5 sizes below its
+  goal and a tier-up always takes a round (uncapped it would start at size 1 from about tier 30).
+  Dense Core 10 leaves it 15 sizes below. Tiers 1, 3, 5 and 10 unlock skins
   (trophies).
 - Skins (rim colour + swirl pattern: spiral, rings, stars, galaxy or none) cost 3–30 DM or come
   from trophies.

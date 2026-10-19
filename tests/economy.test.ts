@@ -175,6 +175,10 @@ describe('maps', () => {
       expect(m.goal - at50.startLevel).toBeLessThanOrEqual(levelsPerRound);
       expect(at50.mapMul / atCap.mapMul / PRESTIGE.tierScale ** (50 - PRESTIGE.tierSizeCap)).toBeCloseTo(1);
     }
+    // The Moon Base goal raises the tier (tierUpReady). Fully upgraded at the size cap's tier (Dense
+    // Core's late levels cost more DM than earlier tiers earn), reaching it still takes a round.
+    const moon = MAPS[MAPS.length - 1];
+    expect(moon.goal - buildRoundConfig(capped, moon.id).startLevel).toBeGreaterThanOrEqual(5);
     expect(upgradeCost('startSize', 30, 50) / upgradeCost('startSize', 30, PRESTIGE.tierSizeCap) / PRESTIGE.tierScale ** (50 - PRESTIGE.tierSizeCap)).toBeCloseTo(1);
   });
 

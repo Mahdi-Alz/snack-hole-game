@@ -252,7 +252,7 @@ export const MAP_SIZE_MIN_SPAN = 0.15;
  * every such run raises the tier: maps start min(tier, tierSizeCap) sizes smaller, pay and cost
  * tierScale^tier times more, and Dark Matter gains are x(1 + tierDmBonus * tier). The size cap
  * keeps tiers endless: past it a tier only scales the numbers, so every map goal stays reachable
- * (uncapped, Moon Base would start at size 1 from about tier 20).
+ * (uncapped, Moon Base would start at size 1 from about tier 30).
  */
 export const PRESTIGE = {
   coef: 1.75,
@@ -286,7 +286,9 @@ export interface DmUpgradeDef {
 
 export const DM_UPGRADES: DmUpgradeDef[] = [
   { id: 'eventHorizon', name: 'Event Horizon', icon: '🕳️', desc: '+25% cash per level.', base: 2, growth: 1.5, max: 20 },
-  { id: 'denseCore', name: 'Dense Core', icon: '🟣', desc: '+1 starting size per level.', base: 3, growth: 1.7, max: 10 },
+  // Levels 11-20 (605 to 71.7K DM) are the late-game sink once the rest of the tree is maxed. At 20,
+  // maxed Starting Size starts Moon Base 5 sizes below its goal, so a tier-up still takes a round.
+  { id: 'denseCore', name: 'Dense Core', icon: '🟣', desc: '+1 starting size per level.', base: 3, growth: 1.7, max: 20 },
   { id: 'headStart', name: 'Head Start', icon: '🎁', desc: 'Start each run with cash (x10 per level).', base: 2, growth: 2, max: 6 },
   { id: 'quantumHelpers', name: 'Quantum Helpers', icon: '👯', desc: 'Helper holes are 10% bigger and faster per level.', base: 3, growth: 1.8, max: 10 },
   { id: 'gravityWell', name: 'Gravity Well', icon: '🌌', desc: '+1 magnet level for free, per level.', base: 3, growth: 1.8, max: 6 },
