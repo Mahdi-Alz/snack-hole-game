@@ -232,6 +232,8 @@ export class World {
   private reachCheck = 0;
   /** Objects sorted by footprint, for reachableLeft. */
   private bySize: WObj[] = [];
+  /** Map props grouped by type, each sorted by footprint, for nextSnack. `i` skips eaten ones. */
+  private byType: { objs: WObj[]; i: number }[] | null = null;
 
   cash = 0;
   helperCash = 0;
@@ -422,6 +424,34 @@ export class World {
 
   reachableLeft(): number {
     return this.reachable().count;
+  }
+
+  /**
+   * The next kind of prop the main hole grows into, for the HUD hint: among the prop types with
+   * nothing the hole can eat right now, the smallest prop still on the map. Map spawns are scaled
+   * per instance, so this goes by each prop's own footprint. Null once every type left has an
+   * edible prop. Event props are left out. Cheap per frame: map props never come back once eaten,
+   * so each type's cursor only moves forward.
+   */
+  nextSnack(): WObj | null {
+    if (!this.byType) {
+      const groups = new Map<number, WObj[]>();
+      for (const o of this.objects) {
+        if (o.event) continue;
+        const g = groups.get(o.t);
+        if (g) g.push(o);
+        else groups.set(o.t, [o]);
+      }
+      this.byType = [...groups.values()].map((objs) => ({ objs: objs.sort((a, b) => a.f - b.f), i: 0 }));
+    }
+    const fit = SIZE.fit * this.main.r;
+    let next: WObj | null = null;
+    for (const g of this.byType) {
+      while (g.i < g.objs.length && g.objs[g.i].state !== ALIVE) g.i++;
+      const o = g.objs[g.i];
+      if (o && o.f > fit && (!next || o.f < next.f)) next = o;
+    }
+    return next;
   }
 
   /**

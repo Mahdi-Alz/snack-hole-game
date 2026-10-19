@@ -182,6 +182,32 @@ describe('round end', () => {
   });
 });
 
+describe('next snack hint', () => {
+  /** Props scaled to footprints given as multiples of `unit`, far from the hole. */
+  function scaledMap(unit: number, props: [string, number][]) {
+    const b = new MapBuilder('suburb', 200, 1);
+    props.forEach(([type, k], i) => b.put(type, -60 + i * 20, 60, 0, { force: true, scale: (k * unit) / footprintOf(OBJECT_TYPES[typeId(type)]) }));
+    return b.build('#000', '#000', { sky: '#fff', fog: '#fff', sun: '#fff', hemiSky: '#fff', hemiGround: '#000', sunIntensity: 1 });
+  }
+  const at = (w: World, fit: number) => {
+    w.main.r = fit / SIZE.fit;
+    return w.nextSnack();
+  };
+
+  it('goes by the scaled footprint of each prop and skips types with an edible prop left', () => {
+    const w = new World(scaledMap(1, [['cone', 0.5], ['car', 1.5], ['car', 4], ['house', 2]]), cfg());
+    const [, smallCar, bigCar, house] = w.objects;
+    expect(at(w, 1)).toBe(smallCar);
+    // The small car fits, so cars are open even though the big one does not.
+    expect(at(w, 1.8)).toBe(house);
+    smallCar.state = GONE;
+    expect(at(w, 1.8)).toBe(house);
+    house.state = GONE;
+    expect(at(w, 1.8)).toBe(bigCar);
+    expect(at(w, 4.5)).toBeNull();
+  });
+});
+
 describe('maps', () => {
   it('generates every map deterministically with known prop types', () => {
     for (const m of MAPS) {

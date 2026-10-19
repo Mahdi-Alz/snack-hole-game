@@ -1,5 +1,5 @@
-import { ABILITIES, SIZE, type AbilityId } from '../config/balance';
-import { OBJECT_TYPES, footprintOf } from '../config/objects';
+import { ABILITIES, type AbilityId } from '../config/balance';
+import { OBJECT_TYPES } from '../config/objects';
 import { levelToEat } from '../core/economy';
 import { formatCash, formatDuration, formatPercent } from '../core/format';
 import type { World } from '../core/world';
@@ -32,7 +32,6 @@ export class Hud {
   private hintEl: HTMLDivElement;
   private hintTimer = 0;
   private pool: HTMLDivElement[] = [];
-  private snackTypes: { name: string; f: number; level: number }[] = [];
   private shownCash = 0;
   onAbility: ((id: AbilityId) => void) | null = null;
   onPause: (() => void) | null = null;
@@ -81,12 +80,6 @@ export class Hud {
 
   setup(world: World): void {
     this.shownCash = 0;
-    // Distinct prop types on this map, smallest first, for the "next snack" hint.
-    const seen = new Map<number, number>();
-    for (const o of world.objects) if (!o.event && !seen.has(o.t)) seen.set(o.t, footprintOf(OBJECT_TYPES[o.t]));
-    this.snackTypes = [...seen.entries()]
-      .map(([t, f]) => ({ name: OBJECT_TYPES[t].name, f, level: levelToEat(f) }))
-      .sort((a, b) => a.f - b.f);
     this.abilityBar.innerHTML = '';
     this.abilities = [];
     for (const a of ABILITIES) {
@@ -133,9 +126,8 @@ export class Hud {
     setText(this.sizeNum, String(lvl + 1));
     const p = Math.round(world.levelProgress * 100);
     this.sizeRing.style.setProperty('--p', `${p}%`);
-    const fit = SIZE.fit * world.main.r;
-    const next = this.snackTypes.find((s) => s.f > fit);
-    setText(this.snack, next ? `Next: ${next.name} @ ${next.level + 1}` : 'Eat everything!');
+    const next = world.nextSnack();
+    setText(this.snack, next ? `Next: ${OBJECT_TYPES[next.t].name} @ ${levelToEat(next.f) + 1}` : 'Eat everything!');
 
     // Count-up cash display.
     this.shownCash += (world.cash - this.shownCash) * Math.min(1, dt * 10);
