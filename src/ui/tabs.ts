@@ -32,6 +32,7 @@ import {
   isUpgradeVisible,
   lifetimeForDm,
   mapLockReason,
+  mapMaxLevel,
   prestigeUnlocked,
   singularityPreview,
   tierDmMult,
@@ -218,6 +219,7 @@ function mapsTab(api: HubApi, cards: Card[]): HTMLElement {
       return;
     }
     const next = MAPS[i + 1];
+    const max = mapMaxLevel(m.id);
     const c = card({
       icon: m.icon,
       title: m.name,
@@ -227,7 +229,7 @@ function mapsTab(api: HubApi, cards: Card[]): HTMLElement {
       effect: () =>
         next && !s.maps[next.id]
           ? `Goal: size ${m.goal + 1} (best ${s.mapLevel[m.id] + 1}) → ${next.name}`
-          : `Best size ${s.mapLevel[m.id] + 1}`,
+          : `Best size ${Math.min(s.mapLevel[m.id], max) + 1} · max ${max + 1}`,
       button: {
         label: () => 'Select',
         cost: () => '',

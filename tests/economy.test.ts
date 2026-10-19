@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CASH_VALUE, COMBO, DM_UPGRADES, HEAD_START_BASE, MAPS, OFFLINE, PRESTIGE, ROUND, ROUND_END, UPGRADES } from '../src/config/balance';
+import { CASH_VALUE, COMBO, DM_UPGRADES, HEAD_START_BASE, MAPS, MAP_SIZE_HEADROOM, MAP_SIZE_MIN_SPAN, OFFLINE, PRESTIGE, ROUND, ROUND_END, UPGRADES } from '../src/config/balance';
+import { OBJECT_TYPES, footprintOf, typeId } from '../src/config/objects';
 import {
   applyPrestige,
   buildRoundConfig,
@@ -16,6 +17,7 @@ import {
   levelToEat,
   lifetimeForDm,
   mapLockReason,
+  mapMaxLevel,
   noteRound,
   radiusForLevel,
   roundTimeFor,
@@ -24,6 +26,7 @@ import {
   unlockMaps,
   upgradeCost,
 } from '../src/core/economy';
+import { generateMap } from '../src/core/mapgen';
 import { defaultSave } from '../src/core/save';
 
 describe('cost curves', () => {
@@ -143,7 +146,7 @@ describe('maps', () => {
     s.stats.rounds = 1;
     s.upgrades.startSize = 40;
     const last = MAPS[MAPS.length - 1];
-    expect(buildRoundConfig(s, MAPS[0].id).startLevel).toBe(40);
+    expect(buildRoundConfig(s, MAPS[0].id).startLevel).toBe(mapMaxLevel(MAPS[0].id));
     expect(buildRoundConfig(s, last.id).startLevel).toBe(40 - last.sizeOffset);
     s.tier = 2;
     expect(buildRoundConfig(s, last.id).startLevel).toBe(40 - last.sizeOffset - 2);
@@ -173,6 +176,27 @@ describe('maps', () => {
       expect(at50.mapMul / atCap.mapMul / PRESTIGE.tierScale ** (50 - PRESTIGE.tierSizeCap)).toBeCloseTo(1);
     }
     expect(upgradeCost('startSize', 30, 50) / upgradeCost('startSize', 30, PRESTIGE.tierSizeCap) / PRESTIGE.tierScale ** (50 - PRESTIGE.tierSizeCap)).toBeCloseTo(1);
+  });
+
+  it('caps the hole at a size that swallows every prop on the map, above the map goal', () => {
+    const s = defaultSave(0);
+    s.stats.rounds = 1;
+    s.upgrades.startSize = UPGRADES.find((u) => u.id === 'startSize')!.max;
+    s.dmUpgrades.denseCore = DM_UPGRADES.find((d) => d.id === 'denseCore')!.max;
+    for (const m of MAPS) {
+      const max = mapMaxLevel(m.id);
+      const map = generateMap(m.id);
+      const biggest = Math.max(...map.spawns.map((sp) => footprintOf(OBJECT_TYPES[typeId(sp.type)], sp.scale)));
+      expect(canEat(biggest, radiusForLevel(max - MAP_SIZE_HEADROOM))).toBe(true);
+      // The cap never stops a hole short of MAP_SIZE_MIN_SPAN of the map's width.
+      expect(2 * radiusForLevel(max + 1)).toBeGreaterThan(MAP_SIZE_MIN_SPAN * map.size);
+      expect(m.goal).toBeLessThan(max);
+      const c = buildRoundConfig(s, m.id);
+      expect(c.maxLevel).toBe(max);
+      expect(c.startLevel).toBeLessThanOrEqual(max);
+    }
+    // The size30 achievement asks for size 30 (level 29) on some map.
+    expect(Math.max(...MAPS.map((m) => mapMaxLevel(m.id)))).toBeGreaterThanOrEqual(29);
   });
 });
 

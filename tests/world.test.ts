@@ -61,6 +61,20 @@ describe('swallowing', () => {
     expect(w.events.some((e) => e.k === 'level')).toBe(true);
   });
 
+  it("stops growing at the map's max size", () => {
+    const c = cfg();
+    c.startLevel = c.maxLevel + 5;
+    const w = new World(tinyMap(), c);
+    expect(w.main.level).toBe(c.maxLevel);
+    c.startLevel = c.maxLevel - 1;
+    const g = new World(tinyMap(), c);
+    g.gainXp(1e12);
+    expect(g.main.level).toBe(c.maxLevel);
+    expect(g.main.baseR).toBe(radiusForLevel(c.maxLevel));
+    expect(g.levelProgress).toBe(1);
+    expect(g.reachable().levels).toBe(0);
+  });
+
   it('combo stacks for quick successive swallows and lapses after the window', () => {
     const b = new MapBuilder('suburb', 100, 1);
     for (let i = 0; i < 5; i++) b.put('cone', i * 0.05, 0, 0, { force: true });

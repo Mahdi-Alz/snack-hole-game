@@ -1,5 +1,5 @@
 import { MAPS } from '../config/balance';
-import { mapDef, roundTimeFor, startLevel } from '../core/economy';
+import { mapDef, mapMaxLevel, roundTimeFor, startLevel } from '../core/economy';
 import { formatCash, formatNumber, formatPercent } from '../core/format';
 import type { SaveData } from '../core/save';
 import type { Card } from './cards';
@@ -154,11 +154,13 @@ export class Hub {
     const m = mapDef(s.selectedMap);
     setText(this.playMap, `${m.icon} ${m.name}`);
     const first = s.stats.rounds === 0;
+    const start = startLevel(s);
+    const maxed = start >= mapMaxLevel(s.selectedMap) ? ' (max)' : '';
     setText(
       this.playInfo,
       first
         ? `${roundTimeFor(s)}s · steer with mouse, touch or WASD`
-        : `${roundTimeFor(s)}s · start size ${startLevel(s) + 1} · ${goalText(s)}`,
+        : `${roundTimeFor(s)}s · start size ${start + 1}${maxed} · ${goalText(s)}`,
     );
     for (const c of this.cards) c.update();
   }

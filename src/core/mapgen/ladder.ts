@@ -1,6 +1,6 @@
 import { SIZE } from '../../config/balance';
 import { OBJECT_TYPES, footprintOf, typeId } from '../../config/objects';
-import { levelToEat, radiusForLevel } from '../economy';
+import { levelToEat, radiusForLevel } from '../size';
 import type { MapData } from './builder';
 
 /** Size level a spawn becomes edible at. */

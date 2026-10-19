@@ -12,13 +12,14 @@ import {
   MAGNET,
   MAPS,
   MAP_COMPLETE_BONUS,
+  MAP_SIZE_HEADROOM,
+  MAP_SIZE_MIN_SPAN,
   OFFLINE,
   PRESTIGE,
   QUANTUM_PER_LEVEL,
   ROUND,
   ROUND_END,
   SET_BONUS,
-  SIZE,
   SPEED_PER_LEVEL,
   UPGRADES,
   type AbilityDef,
@@ -31,7 +32,10 @@ import {
   type UpgradeId,
 } from '../config/balance';
 import { OBJECT_TYPES, type GulpSet } from '../config/objects';
+import { generateMap } from './mapgen';
+import { spawnLevel } from './mapgen/ladder';
 import { defaultSave, type SaveData } from './save';
+import { levelForRadius } from './size';
 
 // ---------------------------------------------------------------- generic cost curves
 
@@ -55,32 +59,24 @@ export const mapDef = (id: MapId): MapDef => MAPS.find((m) => m.id === id)!;
 
 // ---------------------------------------------------------------- size formulas
 
-export function radiusForLevel(level: number): number {
-  return SIZE.baseRadius * Math.pow(SIZE.radiusGrowth, level);
-}
+export { canEat, frontierXpMult, holeSpeed, levelForRadius, levelToEat, radiusForLevel, xpForLevel } from './size';
 
-export function xpForLevel(level: number): number {
-  const r = radiusForLevel(level);
-  const ramp = Math.min(1, (level + SIZE.rampStart) / SIZE.rampLevels);
-  return SIZE.xpCoef * Math.pow(r, SIZE.xpExp) * ramp;
-}
+const maxLevels = new Map<MapId, number>();
 
-/** XP multiplier for eating a prop of footprint `f` at radius `r`: props near the size limit count more. */
-export function frontierXpMult(f: number, r: number): number {
-  return 1 + SIZE.frontierBonus * Math.pow(Math.min(1, f / (SIZE.fit * r)), SIZE.frontierExp);
-}
-
-export function holeSpeed(radius: number, speedMult: number): number {
-  return (SIZE.speedBase + SIZE.speedPerRadius * radius) * speedMult;
-}
-
-export function canEat(footprint: number, radius: number): boolean {
-  return footprint <= SIZE.fit * radius;
-}
-
-/** Smallest level whose radius can swallow an object with this footprint. */
-export function levelToEat(footprint: number): number {
-  return Math.max(0, Math.ceil(Math.log(footprint / (SIZE.fit * SIZE.baseRadius)) / Math.log(SIZE.radiusGrowth) - 1e-9));
+/**
+ * Biggest size level a hole reaches on a map: the level that swallows the map's biggest prop, plus
+ * MAP_SIZE_HEADROOM, and at least the level whose hole spans MAP_SIZE_MIN_SPAN of the map's width.
+ * A bigger hole would only cover the map.
+ */
+export function mapMaxLevel(mapId: MapId): number {
+  let l = maxLevels.get(mapId);
+  if (l === undefined) {
+    const map = generateMap(mapId);
+    const eatAll = Math.max(...map.spawns.map(spawnLevel)) + MAP_SIZE_HEADROOM;
+    l = Math.max(eatAll, levelForRadius((MAP_SIZE_MIN_SPAN * map.size) / 2));
+    maxLevels.set(mapId, l);
+  }
+  return l;
 }
 
 // ---------------------------------------------------------------- upgrade effects
@@ -390,6 +386,8 @@ export interface RoundConfig {
   mapMul: number;
   roundTime: number;
   startLevel: number;
+  /** The hole never grows past this size level on this map (mapMaxLevel). */
+  maxLevel: number;
   speedMult: number;
   cashMult: number;
   xpMult: number;
@@ -412,9 +410,13 @@ export function tierSizePenalty(tier: number): number {
   return Math.min(tier, PRESTIGE.tierSizeCap);
 }
 
-/** Starting size level on a map: upgrades minus that map's size offset and the tier's size penalty. */
+/**
+ * Starting size level on a map: upgrades minus that map's size offset and the tier's size penalty,
+ * up to the map's max size.
+ */
 export function startLevel(save: SaveData, mapId: MapId = save.selectedMap): number {
-  return Math.max(0, save.upgrades.startSize + dmLevel(save, 'denseCore') - mapDef(mapId).sizeOffset - tierSizePenalty(save.tier));
+  const level = save.upgrades.startSize + dmLevel(save, 'denseCore') - mapDef(mapId).sizeOffset - tierSizePenalty(save.tier);
+  return Math.min(mapMaxLevel(mapId), Math.max(0, level));
 }
 
 export function roundTimeFor(save: SaveData): number {
@@ -438,6 +440,7 @@ export function buildRoundConfig(save: SaveData, mapId: MapId = save.selectedMap
     mapMul: mapDef(mapId).valueMul * tierCostMul(save.tier),
     roundTime: roundTimeFor(save),
     startLevel: startLevel(save, mapId),
+    maxLevel: mapMaxLevel(mapId),
     speedMult: 1 + SPEED_PER_LEVEL * save.upgrades.speed,
     cashMult: globalCashMult(save),
     xpMult: (1 + GROWTH_PER_LEVEL * save.upgrades.growth) * mapDef(mapId).xpMul,

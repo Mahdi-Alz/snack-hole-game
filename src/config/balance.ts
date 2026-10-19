@@ -232,6 +232,16 @@ export const MAPS: MapDef[] = [
 export const MAP_COMPLETE_BONUS = 0.25;
 /** Share of a map eaten that counts as clearing it (its 100% mark and MAP_COMPLETE_BONUS). */
 export const MAP_CLEARED_FRACTION = 0.9995;
+/**
+ * A hole stops growing this many size levels past the one that swallows the map's biggest prop
+ * (see mapMaxLevel), both at round start and during the round.
+ */
+export const MAP_SIZE_HEADROOM = 3;
+/**
+ * ...but never before it spans this share of the map's width, so maps of small props (Suburb,
+ * Farm) still let the hole grow about as big, next to the map, as the others do.
+ */
+export const MAP_SIZE_MIN_SPAN = 0.15;
 
 // ---------------------------------------------------------------- prestige
 /**

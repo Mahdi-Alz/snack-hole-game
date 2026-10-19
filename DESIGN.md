@@ -43,6 +43,11 @@ from that round. Ending it from the pause menu does count.
 
 - Radius `R(L) = 0.75 * 1.125^L`. L starts at Starting Size + Dense Core − the map's size offset −
   the Singularity tier (at most 10), and every round begins with half the XP of its first level.
+- Each map has a max size (`mapMaxLevel`): the level that swallows its biggest prop, plus 3
+  (`MAP_SIZE_HEADROOM`), and at least the level whose hole spans 15% of the map's width
+  (`MAP_SIZE_MIN_SPAN`; only Suburb and Farm, whose props are small, reach it). Neither the start
+  size nor in-round growth goes past it, so maxed upgrades on an early map no longer give a hole
+  that covers the whole map.
 - XP for L → L+1: `8 * R(L)^2 * min(1, (L + 2) / 6)`. A prop gives `f^2` XP, times
   `1 + 3 * (f / 0.9R)^3` for props close to the size limit. Equal exponents keep the number of
   your-size props per level constant, so growth runs at a steady ~4–6 s per level instead of
@@ -148,14 +153,14 @@ Esc (or the ⏸ button) pauses a round: the simulation freezes, with Resume / Se
 Maps unlock by size, not cash: reach a map's size goal in a round and the next map unlocks (and
 is selected). Later maps also need Singularities.
 
-| Map | Unlock | Goal (size) | Value x | Size offset | XP x |
-|---|---|---|---|---|---|
-| Sunny Suburb | free | 17 | 1 | 0 | 1 |
-| Happy Farm | Suburb goal | 20 | 6 | 8 | 0.81 |
-| Downtown | Farm goal | 26 | 45 | 16 | 0.62 |
-| Harbor | Downtown goal | 25 | 236 | 22 | 0.47 |
-| Airport | Harbor goal + 1 Singularity | 28 | 1,000 | 31 | 0.8 |
-| Moon Base | Airport goal + 3 Singularities | 26 | 1,400 | 35 | 0.81 |
+| Map | Unlock | Goal (size) | Max size | Value x | Size offset | XP x |
+|---|---|---|---|---|---|---|
+| Sunny Suburb | free | 17 | 27 | 1 | 0 | 1 |
+| Happy Farm | Suburb goal | 20 | 29 | 6 | 8 | 0.81 |
+| Downtown | Farm goal | 26 | 31 | 45 | 16 | 0.62 |
+| Harbor | Downtown goal | 25 | 30 | 236 | 22 | 0.47 |
+| Airport | Harbor goal + 1 Singularity | 28 | 35 | 1,000 | 31 | 0.8 |
+| Moon Base | Airport goal + 3 Singularities | 26 | 30 | 1,400 | 35 | 0.81 |
 
 Offsets were picked so you enter each map near the bottom of its size ladder with the Starting
 Size that cleared the previous goal, and need about 5 more levels to reach its goal (5–8 rounds
@@ -249,7 +254,9 @@ src/
   config/      balance.ts (economy numbers), objects.ts (prop catalogue: 106 types)
   core/        pure logic, no DOM/three — runs headless in tests and the sim
     format.ts      number formatting (K, M, B, T, Qa, Qi, scientific)
-    economy.ts     costs, effects, map unlocks, offline, prestige and tiers, round config
+    economy.ts     costs, effects, map unlocks, map max sizes, offline, prestige and tiers,
+                   round config
+    size.ts        hole size formulas (radius, XP per level, what fits); mapgen uses them too
     save.ts        versioned save, migration, defaults
     round.ts       settleRound: books a finished round into the save (game and sim share it)
     world.ts       round simulation: holes, swallowing, movers, combo, abilities, early finish

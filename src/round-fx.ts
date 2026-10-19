@@ -151,11 +151,13 @@ export class RoundFeedback {
           renderer.pulseHole(1);
           audio.levelUp();
           const unlocked = this.newlyEdible(w, e.level);
+          const max = e.level >= w.cfg.maxLevel;
           // Keep a fresh LANDMARK! banner on screen; the level-up shows as a floater instead.
           if (performance.now() < this.landmarkBannerUntil) {
             const p = renderer.project(hole.x, 0, hole.z);
-            if (p) hud.floater(p.x, p.y - 90, `SIZE ${e.level + 1}!`, 'combo', 1.2);
-          } else hud.banner(`SIZE ${e.level + 1}`, unlocked ? `Now you can eat: ${unlocked}` : '', 'small');
+            if (p) hud.floater(p.x, p.y - 90, max ? 'MAX SIZE!' : `SIZE ${e.level + 1}!`, 'combo', 1.2);
+          } else if (max) hud.banner('MAX SIZE', `Size ${e.level + 1}: the biggest you get on this map`, 'small');
+          else hud.banner(`SIZE ${e.level + 1}`, unlocked ? `Now you can eat: ${unlocked}` : '', 'small');
           break;
         }
         case 'comboEnd':

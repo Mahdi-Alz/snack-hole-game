@@ -205,11 +205,14 @@ export function lerpAngle(a: number, b: number, t: number): number {
   return a + d * t;
 }
 
-/** Spends `g.xp` on size levels, one level's cost at a time. Returns how many levels `g` gained. */
-function spendXp(g: { level: number; xp: number }): number {
+/**
+ * Spends `g.xp` on size levels, one level's cost at a time, up to level `max`. Returns how many
+ * levels `g` gained.
+ */
+function spendXp(g: { level: number; xp: number }, max: number): number {
   const from = g.level;
   let need = xpForLevel(g.level);
-  while (g.xp >= need) {
+  while (g.level < max && g.xp >= need) {
     g.xp -= need;
     g.level++;
     need = xpForLevel(g.level);
@@ -327,10 +330,10 @@ export class World {
     const main = new WHole();
     main.x = map.start.x;
     main.z = map.start.z;
-    main.level = cfg.startLevel;
-    main.baseR = main.r = radiusForLevel(cfg.startLevel);
+    main.level = Math.min(cfg.startLevel, cfg.maxLevel);
+    main.baseR = main.r = radiusForLevel(main.level);
     // Head start on the first size-up so every round opens with a quick level.
-    main.xp = xpForLevel(cfg.startLevel) * SIZE.startXp;
+    main.xp = xpForLevel(main.level) * SIZE.startXp;
     this.holes.push(main);
 
     for (let i = 0; i < cfg.helpers; i++) {
@@ -395,8 +398,14 @@ export class World {
     return comboMult(this.combo, this.cfg.comboCap);
   }
 
-  /** XP progress (0..1) toward the next size level. */
+  /** The main hole reached this map's max size and grows no more. */
+  get atMaxSize(): boolean {
+    return this.main.level >= this.cfg.maxLevel;
+  }
+
+  /** XP progress (0..1) toward the next size level; full at max size. */
   get levelProgress(): number {
+    if (this.atMaxSize) return 1;
     return Math.min(1, this.main.xp / xpForLevel(this.main.level));
   }
 
@@ -425,7 +434,7 @@ export class World {
       cash += o.value * this.cfg.cashMult;
       weight += o.w;
       grow.xp += o.xp * this.cfg.xpMult * frontierXpMult(o.f, r);
-      if (spendXp(grow)) {
+      if (spendXp(grow, this.cfg.maxLevel)) {
         r = radiusForLevel(grow.level);
         fit = mouth * r;
       }
@@ -859,10 +868,11 @@ export class World {
   }
 
   gainXp(xp: number): void {
+    if (this.atMaxSize) return;
     const h = this.main;
     const from = h.level;
     h.xp += xp;
-    if (!spendXp(h)) return;
+    if (!spendXp(h, this.cfg.maxLevel)) return;
     for (let l = from + 1; l <= h.level; l++) this.events.push({ k: 'level', level: l });
     this.levelsGained += h.level - from;
     h.baseR = radiusForLevel(h.level);

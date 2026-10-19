@@ -127,7 +127,10 @@ export class Hud {
     const p = Math.round(world.levelProgress * 100);
     this.sizeRing.style.setProperty('--p', `${p}%`);
     const next = world.nextSnack();
-    setText(this.snack, next ? `Next: ${OBJECT_TYPES[next.t].name} @ ${levelToEat(next.f) + 1}` : 'Eat everything!');
+    setText(
+      this.snack,
+      next ? `Next: ${OBJECT_TYPES[next.t].name} @ ${levelToEat(next.f) + 1}` : world.atMaxSize ? 'Max size! Eat everything!' : 'Eat everything!',
+    );
 
     // Count-up cash display.
     this.shownCash += (world.cash - this.shownCash) * Math.min(1, dt * 10);
