@@ -354,6 +354,8 @@ export interface AbilityConfig {
 
 export interface RoundConfig {
   mapId: MapId;
+  /** The map was cleared (100%) in an earlier round, so leftover crumbs may end a round early. */
+  mapCleared: boolean;
   mapMul: number;
   roundTime: number;
   startLevel: number;
@@ -401,6 +403,7 @@ export function buildRoundConfig(save: SaveData, mapId: MapId = save.selectedMap
   }
   return {
     mapId,
+    mapCleared: save.map100[mapId],
     mapMul: mapDef(mapId).valueMul * tierCostMul(save.tier),
     roundTime: roundTimeFor(save),
     startLevel: startLevel(save, mapId),

@@ -33,7 +33,9 @@ from that round. Ending it from the pause menu does count.
 - Every 0.5 s the round checks it. It is **snacked out** when nothing is reachable, or when no
   more growth is possible and the reachable leftovers would pay less than 5% of the round's cash
   so far. Round cash includes combo, so the leftovers are valued at the combo cap. A random event
-  still to come starts at once instead.
+  still to come starts at once instead. Crumbs never end a round on a map that has not been
+  cleared yet while everything left on it is reachable, so the last few % of its 100% stay
+  playable.
 - Finishing early (snacked out or map cleared) pays a time bonus of +1% of the round's cash per
   second left, up to +50%.
 
@@ -215,26 +217,26 @@ round's level-up times, `--seed` changes the world seeds.
 | first helper | 7:00 |
 | Downtown | 15:30 |
 | Harbor | 33:00 |
-| first Singularity (+8 DM) | 44:20 |
-| Airport (run 2) | 1h 09m |
-| Moon Base (run 4) | 2h 24m |
-| first tier (run 4 collapse) | 3h 04m |
+| first Singularity (+8 DM) | 46:26 |
+| Airport (run 2) | 1h 05m |
+| Moon Base (run 4) | 2h 01m |
+| first tier (run 4 collapse) | 2h 25m |
 
-Targets met in the latest report (11/17): first size-up ≤ 5 s (3.7 s), 4–8 s per level (4.1 s),
-last level ≤ 1.5x the first (0.92x; the first size-up is scaled to a full level's XP), no dead
-time, 1–3 purchases per shop visit (2), Starting Size costing 0.3–1.5 rounds (0.92), first
-Singularity at 44 min, run 2 back to Harbor in 46% of run 1's time, DM per run growing at most x2
-(8, 7, 8, 12, 18, 27), all maps at 2h 24m, 8 h offline = 4 rounds. `--seed 2` gives 12 and
-`--seed 3` 10; any change to the sim's random draws reshuffles which borderline targets pass.
+Targets met in the latest report (11/17): first size-up ≤ 5 s (3.3 s), 4–8 s per level (4.0 s),
+last level ≤ 1.5x the first (1.02x; the first size-up is scaled to a full level's XP), no dead
+time, 1–3 purchases per shop visit (3), Starting Size costing 0.3–1.5 rounds (0.62), first
+Singularity at 46 min, run 2 back to Harbor in 42% of run 1's time, DM per run growing at most x2
+(8, 6, 7, 11, 17, 27), all maps at 2h 01m, 8 h offline = 4 rounds. `--seed 2` and `--seed 3` give
+12; any change to the sim's random draws reshuffles which borderline targets pass.
 Misses: radius growth per round 7.4x (target 3–5x, which needs 7+ s per level in a 100 s round,
 and Downtown/Harbor goals sit 16–20 sizes above their entry level); 90% of visits buying something
-or able to after one more round, counting cash left over (83%: late runs spend many rounds on
+or able to after one more round, counting cash left over (89%: late runs spend many rounds on
 cleared maps with only Starting Size left to buy, until the sim's +50% DM rule lets it collapse);
-cheapest option left 0.81 rounds of income (target 1–3: run 1 income doubles every round across
+cheapest option left 0.53 rounds of income (target 1–3: run 1 income doubles every round across
 ~10 open tracks and later runs buy 10–30 levels per visit on the early maps); 4–8 rounds per map
-in run 1 (4, 6, 9: Downtown took 9); run 3 reaches the Airport in 63% of run 2's time (target
+in run 1 (4, 6, 9: Downtown took 9); run 3 reaches the Airport in 76% of run 2's time (target
 25–55%: each run adds only ~+50% DM, about 1.3x income, and both runs clear the early maps at
-about one round per map); skill band 1.01–1.57x (target 1.5–3: a 1.4-skill bot gains only 0.5–2
+about one round per map); skill band 1.09–1.49x (target 1.5–3: a 1.4-skill bot gains only 0.5–2
 more sizes per round than a 0.6-skill one, so the band is mostly round-to-round noise).
 
 ## Architecture

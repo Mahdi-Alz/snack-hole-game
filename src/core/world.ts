@@ -392,9 +392,9 @@ export class World {
    * fit after growing on all of those (props are taken smallest first, so one pass reaches the
    * fixed point). While Mega Mouth is active or will recharge before time runs out, the enlarged
    * mouth counts too. Dormant event props are not counted. `levels` is how many more size levels
-   * that food is worth and `cash` what it would pay (before combo).
+   * that food is worth, `cash` what it would pay (before combo) and `weight` its share of map %.
    */
-  reachable(): { count: number; levels: number; cash: number } {
+  reachable(): { count: number; levels: number; cash: number; weight: number } {
     if (this.bySize.length !== this.objects.length) this.bySize = [...this.objects].sort((a, b) => a.f - b.f);
     const mega = this.abilities.mega;
     const megaUsable = this.cfg.abilities.mega.level > 0 && (mega.active > 0 || mega.cd <= this.timeLeft);
@@ -404,18 +404,20 @@ export class World {
     let fit = mouth * r;
     let count = 0;
     let cash = 0;
+    let weight = 0;
     for (const o of this.bySize) {
       if (o.state !== ALIVE) continue;
       if (o.f > fit) break;
       count++;
       cash += o.value * this.cfg.cashMult;
+      weight += o.w;
       grow.xp += o.xp * this.cfg.xpMult * frontierXpMult(o.f, r);
       if (spendXp(grow)) {
         r = radiusForLevel(grow.level);
         fit = mouth * r;
       }
     }
-    return { count, levels: grow.level - this.main.level, cash };
+    return { count, levels: grow.level - this.main.level, cash, weight };
   }
 
   reachableLeft(): number {
@@ -427,10 +429,14 @@ export class World {
    * only crumbs remain (worth less than `crumbs` of what this round has paid so far). Round cash
    * already includes combo, so the leftovers are valued at the combo cap: a map with plenty left
    * lets the player build the combo back up, and judging them before combo ends rounds early.
+   * Crumbs never end a round that can still clear a map not cleared before: they are the last
+   * few % of its 100%.
    */
   snackedOut(): boolean {
     const r = this.reachable();
-    return r.count === 0 || (r.levels === 0 && r.cash * this.cfg.comboCap < this.cash * ROUND_END.crumbs);
+    if (r.count === 0) return true;
+    if (!this.cfg.mapCleared && this.weightEaten + r.weight >= this.weightTotal * MAP_CLEARED_FRACTION) return false;
+    return r.levels === 0 && r.cash * this.cfg.comboCap < this.cash * ROUND_END.crumbs;
   }
 
   // ------------------------------------------------------------ abilities

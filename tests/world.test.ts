@@ -17,10 +17,11 @@ function tinyMap() {
   return b.build('#000', '#000', { sky: '#fff', fog: '#fff', sun: '#fff', hemiSky: '#fff', hemiGround: '#000', sunIntensity: 1 });
 }
 
-function cfg(startSize = 0) {
+function cfg(startSize = 0, mapCleared = false) {
   const s = defaultSave(0);
   s.stats.rounds = 1;
   s.upgrades.startSize = startSize;
+  s.map100.suburb = mapCleared;
   return buildRoundConfig(s);
 }
 
@@ -149,7 +150,7 @@ describe('round end', () => {
   });
 
   it('counts the round as done when it cannot grow and only crumbs are left, valued at the combo cap', () => {
-    const w = new World(ladderMap(3, 0.3), cfg(12));
+    const w = new World(ladderMap(3, 0.3), cfg(12, true));
     expect(w.reachable().levels).toBe(0);
     expect(w.snackedOut()).toBe(false);
     // Round cash includes combo, so the leftovers count at the best combo they could pay.
@@ -158,6 +159,17 @@ describe('round end', () => {
     expect(w.snackedOut()).toBe(false);
     w.cash = crumbsAt * 1.1;
     expect(w.snackedOut()).toBe(true);
+  });
+
+  it('lets crumbs finish a map that was never cleared, while everything left is edible', () => {
+    const w = new World(ladderMap(3, 0.3), cfg(12));
+    w.cash = 1e12;
+    expect(w.snackedOut()).toBe(false);
+    // Part of the map out of reach: 100% is not possible this round, so crumbs end it again.
+    const far = new World(ladderMap(3, fitAt(20)), cfg(12));
+    far.cash = 1e12;
+    expect(far.reachable().levels).toBe(0);
+    expect(far.snackedOut()).toBe(true);
   });
 
   it('finishes early with a time bonus once nothing reachable is left', () => {

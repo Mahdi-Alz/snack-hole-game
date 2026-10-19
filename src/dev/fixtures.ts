@@ -1,3 +1,6 @@
+import { DM_UPGRADES, MAPS, SKINS } from '../config/balance';
+import { OBJECT_TYPES } from '../config/objects';
+import { checkAchievements } from '../core/achievements';
 import { defaultSave, type SaveData } from '../core/save';
 
 /** Named starting saves for the `?save=NAME` dev flag (see flags.ts). */
@@ -27,6 +30,41 @@ const FIXTURES: Record<string, (s: SaveData) => void> = {
     for (const id of ['cone', 'hydrant', 'person', 'car', 'bus', 'house', 'tree', 'bench', 'dog', 'cow', 'chicken', 'pig', 'barn']) s.gulpedia[id] = 12;
     s.achievements.push('firstBite', 'eat100', 'car', 'house', 'combo25');
     s.skins.push('mint');
+  },
+  /**
+   * Endless tiers: tier 12 (past PRESTIGE.tierSizeCap), every Dark Matter upgrade maxed, Wormhole
+   * keeping all maps, Moon Base selected and one size short of its goal (tier 13 on the next collapse).
+   */
+  endless: (s) => {
+    s.tier = 12;
+    s.stats = { ...s.stats, rounds: 1183, totalEaten: 644704, bestCombo: 1041, biggestF: 13.5, biggestType: 'moonbase', bestLevel: 40, bestRoundCash: 2.19e20, prestiges: 31, playSeconds: 74 * 3600, abilitiesUsed: 9300 };
+    s.cash = 5.87e20;
+    s.runCash = 5.87e20;
+    s.lifetimeCash = 2.41e21;
+    s.dm = 2400;
+    s.dmTotal = 18301;
+    s.dmClaimed = 11438;
+    for (const u of DM_UPGRADES) s.dmUpgrades[u.id] = u.max;
+    Object.assign(s.upgrades, { startSize: 40, speed: 8, cashValue: 10, roundTime: 4, growth: 6, magnet: 8, combo: 7, golden: 6, offline: 4 });
+    s.helpers = 4;
+    s.helperLevel = 10;
+    Object.assign(s.abilities, { dash: 5, vortex: 5, mega: 4 });
+    for (const m of MAPS) {
+      s.maps[m.id] = true;
+      s.mapBest[m.id] = 1;
+      s.map100[m.id] = true;
+    }
+    s.mapBest.moon = 0.97;
+    s.map100.moon = false;
+    Object.assign(s.mapLevel, { suburb: 26, farm: 27, downtown: 30, harbor: 29, airport: 31, moon: 24 });
+    s.selectedMap = 'moon';
+    s.recentRoundCash = [2.19e20, 1.98e20, 1.7e20];
+    for (const t of OBJECT_TYPES) s.gulpedia[t.id] = 500;
+    s.skins.push(...SKINS.filter((k) => k.cost > 0).map((k) => k.id));
+    for (const id of ['upgrades', 'helpers', 'abilities', 'maps', 'singularity', 'gulpedia', 'trophies', 'skins']) s.flags[`tab_${id}`] = true;
+    // Granted here so the start of the game does not celebrate 42 trophies at once.
+    checkAchievements(s);
+    s.skin = 'quasar';
   },
 };
 
