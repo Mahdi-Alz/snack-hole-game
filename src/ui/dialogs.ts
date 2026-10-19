@@ -1,5 +1,7 @@
-import { formatCash, formatDuration, formatNumber, formatPercent } from '../core/format';
-import type { Quality, Settings } from '../core/save';
+import type { MapId } from '../config/balance';
+import { mapDef, startLevel, type SingularityPreview } from '../core/economy';
+import { formatCash, formatDuration, formatNumber, formatPercent, formatRate } from '../core/format';
+import type { Quality, SaveData, Settings } from '../core/save';
 import type { EndReason } from '../core/world';
 import { h } from './dom';
 
@@ -212,6 +214,119 @@ export function confirmDialog(title: string, body: string, yes: string, onYes: (
           },
           yes,
         ),
+      ),
+    ),
+  );
+}
+
+/** How long the Singularity's reset button must be held, and how long a first Enter / gamepad press keeps it armed. */
+const HOLD_MS = 1200;
+const ARM_MS = 4000;
+
+/**
+ * Button that runs `onDone` only after a mouse or touch press held for HOLD_MS. A click that is no
+ * pointer press (Enter, Space, gamepad A) arms it instead, and a second one while armed runs it.
+ */
+function holdButton(label: string, onDone: () => void): HTMLButtonElement {
+  const fill = h('span', { class: 'hold-fill' });
+  const text = h('span', { class: 'hold-text' }, label);
+  let start = 0;
+  let raf = 0;
+  let armedUntil = 0;
+  let timer = 0;
+  const say = (msg: string, ms: number) => {
+    text.textContent = msg;
+    clearTimeout(timer);
+    timer = window.setTimeout(() => (text.textContent = label), ms);
+  };
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    start = 0;
+    fill.style.transform = '';
+  };
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - start) / HOLD_MS);
+    fill.style.transform = `scaleX(${t})`;
+    if (t < 1) raf = requestAnimationFrame(tick);
+    else {
+      stop();
+      onDone();
+    }
+  };
+  return h(
+    'button',
+    {
+      class: 'btn danger hold-btn',
+      onpointerdown: (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        stop();
+        start = performance.now();
+        raf = requestAnimationFrame(tick);
+      },
+      onpointerup: stop,
+      onpointerleave: stop,
+      onpointercancel: stop,
+      // A long press on touch screens would open the context menu.
+      oncontextmenu: (e: Event) => e.preventDefault(),
+      onclick: (e: MouseEvent) => {
+        // A pointer press let go too early (a held one has already closed the dialog).
+        if (e.detail > 0) return say('Keep holding to reset', 1500);
+        const now = performance.now();
+        if (now < armedUntil) return onDone();
+        armedUntil = now + ARM_MS;
+        say('Press again to reset', ARM_MS);
+      },
+    },
+    fill,
+    text,
+  );
+}
+
+/**
+ * Singularity confirm: a table of what the run has now and what the next one starts with, and a
+ * reset button that has to be held, so a stray click cannot cost a whole run.
+ */
+export function singularityDialog(save: SaveData, p: SingularityPreview, onConfirm: () => void): void {
+  const a = p.after;
+  const mapName = (id: MapId) => mapDef(id).name;
+  // good: the change helps the player (green); false costs them (red); undefined is neither.
+  const rows: { label: string; now: string; after: string; good?: boolean }[] = [
+    { label: 'Start size', now: String(startLevel(save) + 1), after: String(startLevel(a) + 1), good: false },
+    { label: 'Map', now: mapName(save.selectedMap), after: mapName(a.selectedMap), good: false },
+    { label: 'Cash', now: formatCash(save.cash), after: formatCash(a.cash), good: false },
+    { label: 'Upgrades', now: `${p.upgradeLevels} levels`, after: '0 levels', good: false },
+    { label: 'Helpers', now: String(save.helpers), after: String(a.helpers), good: false },
+    { label: 'Abilities', now: String(p.abilities.length), after: '0', good: false },
+    { label: 'Permanent cash bonus', now: `x${formatRate(p.keptMult)}`, after: `x${formatRate(p.keptMultAfter)}`, good: true },
+    { label: 'Dark Matter', now: formatNumber(save.dm), after: formatNumber(a.dm), good: true },
+    { label: 'Tier', now: String(save.tier), after: String(a.tier) },
+  ];
+  const m = modal(
+    h(
+      'div',
+      { class: 'sing-confirm' },
+      h('h2', null, `Reset this run for +${formatNumber(p.dm)} Dark Matter?`),
+      h(
+        'table',
+        { class: 'compare' },
+        h('thead', null, h('tr', null, h('th', null), h('th', null, 'Now'), h('th', null, 'After'))),
+        h(
+          'tbody',
+          null,
+          ...rows
+            .filter((r) => r.now !== r.after)
+            .map((r) => h('tr', null, h('td', null, r.label), h('td', null, r.now), h('td', { class: r.good === undefined ? '' : r.good ? 'gain' : 'lose' }, r.after))),
+        ),
+      ),
+      h('p', { class: 'modal-text' }, 'Your next run starts small but grows faster: the cash bonus applies to every round.'),
+      h(
+        'div',
+        { class: 'modal-actions' },
+        h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Keep playing'),
+        holdButton('Hold to reset', () => {
+          m.close();
+          onConfirm();
+        }),
       ),
     ),
   );

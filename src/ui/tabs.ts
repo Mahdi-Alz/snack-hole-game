@@ -21,7 +21,6 @@ import {
   cashBreakdown,
   completedSets,
   dmForLifetime,
-  dmGain,
   dmLevel,
   dmUpgradeCost,
   gulpSetTypes,
@@ -34,16 +33,18 @@ import {
   lifetimeForDm,
   mapLockReason,
   prestigeUnlocked,
+  singularityPreview,
   tierDmMult,
   tierUpReady,
   upgradeCost,
   upgradeEffectText,
+  type SingularityPreview,
 } from '../core/economy';
 import { formatCash, formatNumber, formatPercent, formatRate } from '../core/format';
 import type { SaveData } from '../core/save';
 import { thumbInto } from '../render/thumbs';
 import { card, lockedCard, section, type Card } from './cards';
-import { h } from './dom';
+import { h, setText } from './dom';
 
 export interface HubApi {
   save: SaveData;
@@ -83,9 +84,9 @@ const cost = (n: number) => formatCash(n);
 function upgradesTab(api: HubApi, cards: Card[]): HTMLElement {
   const s = api.save;
   const root = h('div', { class: 'tab-body' });
-  // First-run tip only: after a Singularity upgrades are reset, so "permanent" would be wrong.
+  // First-run tip only. It must not call upgrades "permanent": a Singularity resets them.
   if (s.stats.rounds >= 1 && s.stats.prestiges === 0 && Object.values(s.upgrades).every((v) => v === 0)) {
-    root.appendChild(h('div', { class: 'tip' }, '💡 Upgrades are permanent. Buy one, then hit PLAY to go again!'));
+    root.appendChild(h('div', { class: 'tip' }, '💡 Upgrades carry over to every round. Buy one, then hit PLAY to go again!'));
   }
   let teaser = false;
   for (const d of UPGRADES) {
@@ -241,28 +242,73 @@ function mapsTab(api: HubApi, cards: Card[]): HTMLElement {
   return root;
 }
 
+/** The Singularity panel's "Resets" and "You keep" lists, with this run's numbers. */
+function singularityLedger(s: SaveData, p: SingularityPreview): { resets: [string, string][]; keeps: [string, string][] } {
+  const list = (names: string[]) => (names.length ? names.join(', ') : 'none');
+  const keepMaps = dmLevel(s, 'wormhole') > 0;
+  const resets: [string, string][] = [
+    ['Cash', formatCash(s.cash)],
+    ['Upgrades', p.upgradeLevels ? `${p.upgradeLevels} levels` : 'none'],
+    ['Helpers', s.helpers ? `${s.helpers}${s.helperLevel ? ` (Lv ${s.helperLevel})` : ''}` : 'none'],
+    ['Abilities', list(p.abilities.map((id) => ABILITIES.find((a) => a.id === id)!.name))],
+  ];
+  if (!keepMaps) resets.push(['Unlocked maps', list(p.lostMaps.map((id) => MAPS.find((m) => m.id === id)!.name))]);
+  const keeps: [string, string][] = [
+    ['Permanent cash bonus', `x${formatRate(p.keptMult)} → x${formatRate(p.keptMultAfter)}`],
+    ['Dark Matter', `${formatNumber(s.dm)} → ${formatNumber(p.after.dm)}`],
+    ...(keepMaps ? [['Unlocked maps', 'Wormhole'] as [string, string]] : []),
+    ['Trophies', `${s.achievements.length}/${ACHIEVEMENTS.length}`],
+    ['Gulpedia', `${Object.keys(s.gulpedia).length}/${OBJECT_TYPES.length}`],
+    ['DM tree, skins, 100% maps, records', ''],
+  ];
+  return { resets, keeps };
+}
+
+function ledgerRows(title: string, rows: [string, string][]): HTMLElement[] {
+  return [h('div', { class: 'ledger-title' }, title), ...rows.map(([k, v]) => h('div', { class: 'ledger-row' }, h('span', null, k), v ? h('b', null, v) : null))];
+}
+
 function singularityTab(api: HubApi, cards: Card[]): HTMLElement {
   const s = api.save;
   const root = h('div', { class: 'tab-body' });
   const gain = h('div', { class: 'sing-gain' });
+  const sub = h('div', { class: 'sing-sub' });
   const bar = h('div', { class: 'progress-fill' });
   const barText = h('div', { class: 'progress-text' });
-  const btn = h('button', { class: 'sing-btn', onclick: () => api.prestige() }, 'Collapse into Singularity');
+  const resets = h('div', { class: 'ledger lose' });
+  const keeps = h('div', { class: 'ledger keep' });
+  const btn = h('button', { class: 'sing-btn', onclick: () => api.prestige() }, 'Reset run for Dark Matter');
   const info = h('div', { class: 'sing-info' });
   root.append(
-    h('div', { class: 'sing-hero' }, h('div', { class: 'sing-orb' }), gain, h('div', { class: 'progress' }, bar, barText), btn, info),
+    h('div', { class: 'sing-hero' }, h('div', { class: 'sing-orb' }), gain, sub, h('div', { class: 'progress' }, bar, barText), resets, keeps, btn, info),
   );
+  let ledgerKey = '';
   cards.push({
     el: gain,
     update: () => {
-      const dm = dmGain(s);
+      const p = singularityPreview(s);
+      const dm = p.dm;
       const unlocked = prestigeUnlocked(s);
       if (!unlocked) gain.textContent = `Unlock ${MAPS.find((m) => m.id === PRESTIGE.unlockMap)!.name} to collapse`;
       else if (dm > 0) {
         const pct = s.dmTotal > 0 ? ` (+${Math.round((dm / s.dmTotal) * 100)}%)` : '';
-        const after = (1 + PRESTIGE.bonusPerDm * (s.dmTotal + dm)) / (1 + PRESTIGE.bonusPerDm * s.dmTotal);
-        gain.textContent = `+${formatNumber(dm)} Dark Matter${pct} · income x${after.toFixed(2)} after`;
+        gain.textContent = `+${formatNumber(dm)} Dark Matter${pct}`;
       } else gain.textContent = 'Not enough mass yet';
+      const keepMaps = dmLevel(s, 'wormhole') > 0;
+      setText(
+        sub,
+        dm > 0
+          ? `Restart ${keepMaps ? 'this run' : `from ${MAPS.find((m) => m.id === p.after.selectedMap)!.name}`} with a bigger permanent cash bonus.`
+          : 'A Singularity restarts your run for Dark Matter, a permanent cash bonus.',
+      );
+      const ledger = singularityLedger(s, p);
+      const key = JSON.stringify(ledger);
+      if (key !== ledgerKey) {
+        ledgerKey = key;
+        resets.replaceChildren(...ledgerRows('Resets this run', ledger.resets));
+        keeps.replaceChildren(...ledgerRows('You keep', ledger.keeps));
+      }
+      setText(btn, dm > 0 ? `Reset run for +${formatNumber(dm)} DM` : 'Reset run for Dark Matter');
       // Progress toward the next whole DM from the lifetime-cash formula.
       const have = dmForLifetime(s.lifetimeCash);
       const next = lifetimeForDm(have + 1);
@@ -273,7 +319,10 @@ function singularityTab(api: HubApi, cards: Card[]): HTMLElement {
       btn.disabled = dm <= 0;
       const worth = s.dmTotal > 0 && dm >= s.dmTotal * 0.5 ? ' Good time to collapse: +50% or more.' : '';
       const tier = s.tier > 0 || tierUpReady(s) ? ` Tier ${s.tier}${tierUpReady(s) ? ` → ${s.tier + 1} on collapse (${s.tier < PRESTIGE.tierSizeCap ? 'bigger world, ' : ''}x${PRESTIGE.tierScale} payouts and prices, DM x${tierDmMult(s.tier + 1).toFixed(1)})` : ''}.` : '';
-      info.textContent = `Resets cash, upgrades, helpers, abilities${dmLevel(s, 'wormhole') ? '' : ' and maps'}. Each DM ever earned gives +${PRESTIGE.bonusPerDm * 100}% cash forever (you have ${formatNumber(s.dmTotal)}).${headStartCash(s) > 0 ? ` Head Start gives ${formatCash(headStartCash(s))}.` : ''}${worth}${tier}`;
+      // The next map that waits on Singularities: the reason to collapse at all.
+      const gate = MAPS.find((m) => m.needsSingularities > s.stats.prestiges);
+      const gateText = gate ? ` ${gate.name} needs ${gate.needsSingularities} Singularit${gate.needsSingularities === 1 ? 'y' : 'ies'}${s.stats.prestiges > 0 ? ` (you have ${s.stats.prestiges})` : ''}.` : '';
+      info.textContent = `Each DM ever earned gives +${PRESTIGE.bonusPerDm * 100}% cash forever (you have ${formatNumber(s.dmTotal)}).${headStartCash(s) > 0 ? ` Head Start gives ${formatCash(headStartCash(s))}.` : ''}${gateText}${worth}${tier}`;
     },
   });
   root.appendChild(section('Dark Matter Tree', `Unspent: ${formatNumber(s.dm)} DM`));

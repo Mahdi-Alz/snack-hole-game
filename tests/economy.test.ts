@@ -19,6 +19,7 @@ import {
   noteRound,
   radiusForLevel,
   roundTimeFor,
+  singularityPreview,
   timeBonusFrac,
   unlockMaps,
   upgradeCost,
@@ -291,5 +292,23 @@ describe('prestige', () => {
     const n = applyPrestige(s);
     expect(n.maps[PRESTIGE.unlockMap]).toBe(true);
     expect(n.cash).toBe(HEAD_START_BASE * 10);
+    expect(singularityPreview(s, 0).lostMaps).toEqual([]);
+  });
+
+  it('previews what a collapse resets, and a kept cash bonus without the Cash Value upgrade', () => {
+    const s = unlocked();
+    s.maps.farm = true;
+    earn(s, lifetimeForDm(10));
+    s.upgrades.cashValue = 4;
+    s.upgrades.speed = 2;
+    s.abilities.dash = 1;
+    const p = singularityPreview(s, 0);
+    expect(p.dm).toBe(10);
+    expect(p.upgradeLevels).toBe(6);
+    expect(p.abilities).toEqual(['dash']);
+    expect(p.lostMaps).toEqual(['farm', 'downtown']);
+    // Cash Value resets, so only Dark Matter (none yet, then 10 x 10%) counts as kept.
+    expect(p.keptMult).toBeCloseTo(1);
+    expect(p.keptMultAfter).toBeCloseTo(1 + 10 * PRESTIGE.bonusPerDm);
   });
 });

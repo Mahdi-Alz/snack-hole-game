@@ -117,6 +117,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .sing-btn { border: 0; border-radius: 999px; padding: 10px 20px; font-weight: 900; font-size: 15px; cursor: pointer; background: linear-gradient(180deg, #d38cff, #8a5cff); color: #fff; box-shadow: 0 4px 0 #4a24b8; }
 .sing-btn:disabled { filter: grayscale(.8) brightness(.7); cursor: not-allowed; }
 .sing-info { font-size: 12px; opacity: .85; font-weight: 600; }
+.sing-sub { font-size: 13px; font-weight: 700; color: #cbb8ff; }
+.ledger { width: 100%; text-align: left; border-radius: 12px; padding: 8px 12px; font-size: 13px; }
+.ledger.lose { background: rgba(255, 92, 108, .14); border: 1px solid rgba(255, 92, 108, .45); }
+.ledger.keep { background: rgba(46, 204, 113, .12); border: 1px solid rgba(46, 204, 113, .4); }
+.ledger-title { font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+.ledger.lose .ledger-title { color: #ffb3bb; }
+.ledger.keep .ledger-title { color: #9ff0c0; }
+.ledger-row { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; font-weight: 700; color: #e3d4ff; }
+.ledger-row b { color: #fff; text-align: right; }
 .breakdown { background: #fff; border-radius: 12px; padding: 8px 12px; font-size: 13px; }
 .bd-row { display: flex; justify-content: space-between; padding: 2px 0; font-weight: 700; color: var(--ink-soft); }
 .bd-row b { color: var(--ink); }
@@ -214,6 +223,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .modal-text { color: var(--ink-soft); font-weight: 700; line-height: 1.4; }
 .modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
 .modal-actions.wrap { flex-wrap: wrap; }
+.compare { width: 100%; border-collapse: collapse; font-size: 14px; font-weight: 700; margin: 4px 0 2px; }
+.compare th { font-size: 12px; font-weight: 800; color: var(--ink-soft); text-align: right; padding: 2px 6px; }
+.compare td { padding: 5px 6px; border-top: 1px solid #ece6ff; text-align: right; }
+.compare td:first-child { text-align: left; color: var(--ink-soft); }
+/* Red for small text on white: 5.8:1 contrast (--red is too light for text). */
+.compare td.lose { color: #c0243a; }
+.compare td.gain { color: var(--green-text); }
+.hold-btn { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#ui .hold-btn { touch-action: none; }
+.hold-fill { position: absolute; inset: 0; background: rgba(255, 255, 255, .35); transform: scaleX(0); transform-origin: left; pointer-events: none; }
+.hold-text { position: relative; }
 .results-modal { width: min(520px, 100%); }
 .res-title { font-size: 34px; font-weight: 900; color: var(--violet); letter-spacing: 1px; }
 .res-sub { font-weight: 800; color: var(--ink-soft); }

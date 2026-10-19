@@ -1,9 +1,9 @@
-import { ABILITIES, AUTOSAVE_SECONDS, PRESTIGE, SKINS, type AbilityId, type DmUpgradeId, type MapId, type UpgradeId } from './config/balance';
+import { ABILITIES, AUTOSAVE_SECONDS, SKINS, type AbilityId, type DmUpgradeId, type MapId, type UpgradeId } from './config/balance';
 import { Audio } from './audio/audio';
 import { checkAchievements } from './core/achievements';
 import { Bot } from './core/bot';
 import * as eco from './core/economy';
-import { formatNumber, setScientific } from './core/format';
+import { setScientific } from './core/format';
 import { generateMap } from './core/mapgen';
 import { settleRound, summarizeRound } from './core/round';
 import { encodeSaveText, serialize, type SaveData } from './core/save';
@@ -15,7 +15,7 @@ import { pauseThumbs, prewarmThumbs } from './render/thumbs';
 import { RoundFeedback, type GameState } from './round-fx';
 import { applySettings, openSettingsDialog } from './settings-flow';
 import type { DebugPanel } from './ui/debug';
-import { activateFocused, anyModalOpen, confirmDialog, infoDialog, showOffline, showPause, type ModalHandle } from './ui/dialogs';
+import { activateFocused, anyModalOpen, infoDialog, showOffline, showPause, singularityDialog, type ModalHandle } from './ui/dialogs';
 import { showFatal } from './ui/fatal';
 import { Hub } from './ui/hub';
 import { Hud } from './ui/hud';
@@ -475,17 +475,12 @@ export class Game implements HubApi {
   }
 
   prestige(): void {
-    const dm = eco.dmGain(this.save);
-    if (dm <= 0) {
+    const preview = eco.singularityPreview(this.save);
+    if (preview.dm <= 0) {
       this.audio.deny();
       return;
     }
-    confirmDialog(
-      'Collapse into a Singularity?',
-      `You will gain ${formatNumber(dm)} Dark Matter (+${Math.round(dm * PRESTIGE.bonusPerDm * 100)}% cash forever). Cash, upgrades, helpers, abilities${eco.dmLevel(this.save, 'wormhole') ? '' : ' and maps'} reset.`,
-      `Gain ${formatNumber(dm)} DM`,
-      () => this.doPrestige(),
-    );
+    singularityDialog(this.save, preview, () => this.doPrestige());
   }
 
   private doPrestige(): void {

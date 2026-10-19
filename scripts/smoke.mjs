@@ -144,7 +144,12 @@ async function run(viewport, prefix) {
     await page.click('.sing-btn');
     await page.waitForTimeout(400);
     await page.screenshot({ path: `screenshots/${prefix}-07-prestige-confirm.png` });
-    await page.click('.modal .btn.primary');
+    // The reset button only fires when held.
+    const hold = await page.locator('.modal .hold-btn').boundingBox();
+    await page.mouse.move(hold.x + hold.width / 2, hold.y + hold.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(1500);
+    await page.mouse.up();
     await page.waitForTimeout(1800);
     const dm = await page.evaluate(() => window.game.debugState.save.dm);
     console.log('dm after prestige', dm);

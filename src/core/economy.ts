@@ -344,6 +344,37 @@ export function applyPrestige(save: SaveData, now = Date.now()): SaveData {
   return next;
 }
 
+/** What a Singularity would take and give right now, for the panel and its confirm dialog. */
+export interface SingularityPreview {
+  /** Dark Matter it pays. */
+  dm: number;
+  /** The save right after it. */
+  after: SaveData;
+  /** Upgrade levels bought this run (all reset). */
+  upgradeLevels: number;
+  /** Abilities unlocked this run (all reset). */
+  abilities: AbilityId[];
+  /** Unlocked maps that lock again (none with Wormhole). */
+  lostMaps: MapId[];
+  /** The cash multiplier a Singularity keeps (all of it but the Cash Value upgrade), now and after. */
+  keptMult: number;
+  keptMultAfter: number;
+}
+
+export function singularityPreview(save: SaveData, now = Date.now()): SingularityPreview {
+  const after = applyPrestige(save, now);
+  const b = cashBreakdown(save);
+  return {
+    dm: after.dm - save.dm,
+    after,
+    upgradeLevels: Object.values(save.upgrades).reduce((a, v) => a + v, 0),
+    abilities: ABILITIES.filter((a) => save.abilities[a.id] > 0).map((a) => a.id),
+    lostMaps: MAPS.filter((m) => save.maps[m.id] && !after.maps[m.id]).map((m) => m.id),
+    keptMult: b.total / b.upgrade,
+    keptMultAfter: globalCashMult(after),
+  };
+}
+
 // ---------------------------------------------------------------- round configuration
 
 export interface AbilityConfig {

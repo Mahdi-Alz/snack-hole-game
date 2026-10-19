@@ -171,7 +171,10 @@ its best %; reaching 100% gives a permanent +25% cash (kept through prestige).
 - Dark Matter comes from lifetime cash: `DM total = floor(1.75 * (lifetimeCash / 1e6)^0.25)`, and a
   Singularity pays what has not been claimed yet. Doubling DM needs ~16x the cash, and collapsing
   again at the same point pays nothing, so runs must push further. The panel shows the gain, its
-  % of all DM earned so far, the income multiplier after reset, and a hint once the gain is +50%.
+  % of all DM earned so far, a "Resets this run" / "You keep" list with the run's numbers, the
+  next map that needs a Singularity, and a hint once the gain is +50%. The confirm dialog shows a
+  now / after table (start size, map, cash, upgrades, helpers, abilities, permanent cash bonus,
+  DM, tier), and its reset button must be held for 1.2 s (Enter or gamepad A: press twice).
 - Resets cash, upgrades, helpers, abilities, maps (Wormhole keeps maps), map goals and recent
   income. Keeps DM, DM tree, records, Gulpedia, trophies, 100% bonuses, skins, tier.
 - Every DM ever earned gives +10% cash forever (spending does not reduce it).
