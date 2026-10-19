@@ -144,11 +144,12 @@ async function run(viewport, prefix) {
     await page.click('.sing-btn');
     await page.waitForTimeout(400);
     await page.screenshot({ path: `screenshots/${prefix}-07-prestige-confirm.png` });
-    // The reset button only fires when held.
-    const hold = await page.locator('.modal .hold-btn').boundingBox();
-    await page.mouse.move(hold.x + hold.width / 2, hold.y + hold.height / 2);
+    // The reset button only fires when held. Hold until the reset goes through, not for a fixed
+    // time: headless frames can come 400 ms apart, so a release soon after the 1.2 s hold can land
+    // before the frame that would have finished it.
+    await page.locator('.modal .hold-btn').hover();
     await page.mouse.down();
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(() => window.game.debugState.save.dm > 0, null, { polling: 100, timeout: 10000 }).catch(() => {});
     await page.mouse.up();
     await page.waitForTimeout(1800);
     const dm = await page.evaluate(() => window.game.debugState.save.dm);
