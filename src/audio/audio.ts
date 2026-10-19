@@ -176,6 +176,9 @@ export class Audio {
   }
 
   private env(g: GainNode, t: number, peak: number, attack: number, decay: number): void {
+    // Silent until t: a new gain starts at 1, and rounding can put the first event one sample after
+    // the source's start(t), so that sample would play at full level (a click).
+    g.gain.value = 0;
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(peak, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
@@ -451,6 +454,7 @@ export class Audio {
         lfo.start(st);
         lfo.stop(st + dur + 0.05);
       }
+      g.gain.value = 0; // silent until st, see env()
       g.gain.setValueAtTime(0.0001, st);
       g.gain.exponentialRampToValueAtTime(1, st + 0.008);
       g.gain.exponentialRampToValueAtTime(0.0001, st + dur);
@@ -479,6 +483,7 @@ export class Audio {
       o.type = 'sawtooth';
       o.frequency.setValueAtTime(base * 1.25, st);
       o.frequency.exponentialRampToValueAtTime(base * 0.7, st + 0.26);
+      g.gain.value = 0; // silent until st, see env()
       g.gain.setValueAtTime(0.0001, st);
       g.gain.exponentialRampToValueAtTime(1, st + 0.03);
       g.gain.exponentialRampToValueAtTime(0.0001, st + 0.28);
