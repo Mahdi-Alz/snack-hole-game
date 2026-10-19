@@ -251,6 +251,8 @@ src/
     round.ts       settleRound: books a finished round into the save (game and sim share it)
     world.ts       round simulation: holes, swallowing, movers, combo, abilities, early finish
     roundEvents.ts rush hour, UFO fly-by and stampede (staged off-stage, run one at a time)
+    traffic.ts     road vehicles slow for the vehicle ahead and take turns at junctions
+                   (each looks 10x a second, not every frame)
     mapgen/        seeded procedural maps (builder + one generator per map, ladder.ts fills
                    size-ladder gaps)
     bot.ts         greedy steering (sim + hub attract mode)

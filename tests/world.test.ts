@@ -7,7 +7,7 @@ import { generateMap } from '../src/core/mapgen';
 import { MapBuilder } from '../src/core/mapgen/builder';
 import { defaultSave, deserialize, migrate, serialize } from '../src/core/save';
 import { SpatialGrid } from '../src/core/spatial';
-import { ALIVE, FALLING, GONE, World } from '../src/core/world';
+import { ALIVE, FALLING, GONE, World, type WObj } from '../src/core/world';
 
 function tinyMap() {
   const b = new MapBuilder('suburb', 100, 1);
@@ -229,6 +229,56 @@ describe('maps', () => {
     expect(w.eaten).toBeGreaterThan(20);
     expect(w.main.level).toBeGreaterThan(2);
   });
+});
+
+describe('traffic', () => {
+  /** How deep two vehicle boxes overlap (<= 0: apart), by separating axes. */
+  function overlap(a: WObj, b: WObj): number {
+    const box = (o: WObj) => {
+      const d = OBJECT_TYPES[o.t];
+      return { ax: Math.cos(o.rot), az: -Math.sin(o.rot), hl: (d.w * o.s) / 2, hw: (d.d * o.s) / 2 };
+    };
+    const A = box(a);
+    const B = box(b);
+    const half = (p: typeof A, x: number, z: number) => p.hl * Math.abs(p.ax * x + p.az * z) + p.hw * Math.abs(p.az * x - p.ax * z);
+    let depth = Infinity;
+    for (const [x, z] of [[A.ax, A.az], [A.az, -A.ax], [B.ax, B.az], [B.az, -B.ax]]) {
+      depth = Math.min(depth, half(A, x, z) + half(B, x, z) - Math.abs((b.x - a.x) * x + (b.z - a.z) * z));
+    }
+    return depth;
+  }
+
+  it('vehicles queue and take turns at a junction instead of driving through each other', () => {
+    // A plus-shaped junction with two vehicles on each arm, all reaching it at about the same time.
+    const b = new MapBuilder('suburb', 140, 1);
+    const g = b.addGraph(
+      [{ x: 0, z: 0 }, { x: -60, z: 0 }, { x: 60, z: 0 }, { x: 0, z: -60 }, { x: 0, z: 60 }],
+      [[0, 1], [0, 2], [0, 3], [0, 4]],
+    );
+    const arms: [number, number, number][] = [[1, -1, 0], [2, 1, 0], [3, 0, -1], [4, 0, 1]];
+    for (const [from, dx, dz] of arms) {
+      for (const [d, type, speed] of [[14, 'car', 9], [26, from === 4 ? 'bus' : 'car', 11]] as const) {
+        b.put(type, dx * d, dz * d, 0, { force: true, move: { kind: 'graph', graph: g, lane: 2.2, speed, from, to: 0 } });
+      }
+    }
+    const map = b.build('#000', '#000', { sky: '#fff', fog: '#fff', sun: '#fff', hemiSky: '#fff', hemiGround: '#000', sunIntensity: 1 });
+    const w = new World(map, cfg(), { demo: true });
+    w.main.x = w.main.z = 65;
+    const cars = [...w.movers];
+    const moved = cars.map(() => 0);
+    let worst = 0;
+    for (let f = 0; f < 30 * 60; f++) {
+      const before = cars.map((o) => [o.x, o.z]);
+      w.step(1 / 60);
+      cars.forEach((o, i) => (moved[i] += Math.hypot(o.x - before[i][0], o.z - before[i][1])));
+      for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) worst = Math.max(worst, overlap(cars[i], cars[j]));
+    }
+    expect(cars).toHaveLength(8);
+    expect(worst).toBeLessThan(0.05);
+    // No gridlock: every vehicle drove through the junction and on, several times over.
+    for (const m of moved) expect(m).toBeGreaterThan(100);
+  });
+
 });
 
 describe('placement', () => {

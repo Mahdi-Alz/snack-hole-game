@@ -15,6 +15,7 @@ import type { MapData } from './mapgen/builder';
 import { Rng } from './rng';
 import { RoundEvents, type EventId } from './roundEvents';
 import { SpatialGrid } from './spatial';
+import { SENSE_EVERY, senseTraffic } from './traffic';
 
 export type { EventId };
 
@@ -58,12 +59,22 @@ export class WObj {
   lane = 0;
   from = 0;
   to = 0;
+  /** Road vehicles: the node they turn toward at `to`, picked on the way in (-1 until then). */
+  next = -1;
   phase = 0;
   tx = 0;
   tz = 0;
   wait = 0;
   /** MV_RUN: seconds spent detouring around the current obstacle (see RUNNER_PATIENCE). */
   detour = 0;
+  /**
+   * Road vehicles (see senseTraffic): speed factor from the traffic ahead, the vehicle it waits on,
+   * the side room it has past that vehicle, seconds to its next look.
+   */
+  brake = 1;
+  blocker: WObj | null = null;
+  clear = 0;
+  sense = 0;
   x0 = 0;
   x1 = 0;
   z0 = 0;
@@ -496,6 +507,9 @@ export class World {
     o.x += (-dz / L) * o.lane;
     o.z += (dx / L) * o.lane;
     o.rot = Math.atan2(-dz, dx);
+    // Spread the traffic looks over the frames.
+    o.sense = (o.id % 10) * (SENSE_EVERY / 10);
+    o.next = -1;
     this.setGraphTarget(o, 1);
   }
 
@@ -526,6 +540,15 @@ export class World {
       this.setGraphTarget(o, 1);
       return;
     }
+    const next = o.next >= 0 ? o.next : this.pickNext(o);
+    o.next = -1;
+    o.from = o.to;
+    o.to = next;
+    this.setGraphTarget(o, 0);
+  }
+
+  /** The node a graph mover heads for after the one it drives to. */
+  private pickNext(o: WObj): number {
     const adj = this.map.graphs[o.graph].adj[o.to];
     let next = o.from;
     if (adj.length > 1) {
@@ -535,9 +558,7 @@ export class World {
         if (next !== o.from) break;
       }
     } else if (adj.length === 1) next = adj[0];
-    o.from = o.to;
-    o.to = next;
-    this.setGraphTarget(o, 0);
+    return next;
   }
 
   /** True where a wanderer may not walk: inside an uneaten solid prop or a pond. */
@@ -618,7 +639,18 @@ export class World {
     }
     o.bob += dt * (4 + o.speed * 3);
     if (o.mv === MV_GRAPH) {
-      if (this.moveToward(o, o.speed, dt) === MOVE_ARRIVED) this.advanceGraph(o);
+      let speed = o.speed;
+      if (!o.flee) {
+        // Vehicles pick their turn on the way in, so they wait for room on the road out.
+        if (o.phase === 1 && o.next < 0) o.next = this.pickNext(o);
+        o.sense -= dt;
+        if (o.sense <= 0) {
+          o.sense = SENSE_EVERY;
+          senseTraffic(o, this.movers, this.map.graphs);
+        }
+        speed *= o.brake;
+      }
+      if (this.moveToward(o, speed, dt) === MOVE_ARRIVED) this.advanceGraph(o);
     } else {
       const res = this.moveToward(o, o.speed, dt, true);
       if (res !== MOVE_FREE) {
