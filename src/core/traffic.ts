@@ -19,6 +19,8 @@ const AHEAD = 0.5;
 const JUNCTION = 2.5;
 /** Headings closer than this (cosine) drive the same way: they share a junction and queue instead. */
 const SAME_WAY = 0.7;
+/** Headings closer than this (cosine) count as straight on: a wide vehicle turning more swings its corners out. */
+const TURNED = 0.995;
 /** Longest chain of waiting vehicles followed when looking for a ring. */
 const RING = 8;
 
@@ -61,7 +63,11 @@ export function senseTraffic(o: WObj, movers: readonly WObj[], graphs: readonly 
     const qd = OBJECT_TYPES[q.t];
     const ql = qd.w * q.s * 0.5;
     const qw = qd.d * q.s * 0.5;
-    const look = reach + Math.max(ql, qw) + q.speed * AHEAD;
+    // Half diagonal: how far q's corners swing out while it turns on the spot. That is more than GAP
+    // past its length only for wide vehicles (planes); road vehicles turn inside their junction.
+    const qr = Math.hypot(ql, qw);
+    const wide = qr - ql > GAP;
+    const look = reach + (wide ? qr : Math.max(ql, qw)) + q.speed * AHEAD;
     if (Math.abs(dx) > look || Math.abs(dz) > look) continue;
     // The way q drives, and where it gets in the next AHEAD seconds.
     let mx = q.tx - q.x;
@@ -70,6 +76,23 @@ export function senseTraffic(o: WObj, movers: readonly WObj[], graphs: readonly 
     const ux = md > 1e-3 ? mx / md : Math.cos(q.rot);
     const uz = md > 1e-3 ? mz / md : -Math.sin(q.rot);
     const way = ux * cx + uz * cz;
+    const qx = Math.cos(q.rot);
+    const qz = -Math.sin(q.rot);
+    // A wide q swings its corners out while it still turns, and from when it nears a junction it turns at.
+    let swing = wide && qx * ux + qz * uz < TURNED;
+    if (wide && !swing && q.phase === 1 && q.next >= 0) {
+      const nodes = graphs[q.graph].nodes;
+      const a = nodes[q.from];
+      const b = nodes[q.to];
+      const c = nodes[q.next];
+      const ax = b.x - a.x;
+      const az = b.z - a.z;
+      const bx = c.x - b.x;
+      const bz = c.z - b.z;
+      swing =
+        ax * bx + az * bz < TURNED * Math.hypot(ax, az) * Math.hypot(bx, bz) &&
+        Math.hypot(q.x - b.x, q.z - b.z) < qr + Math.abs(q.lane);
+    }
     if (gate > 0 && gate < free && q.phase === 1 && q.from === o.to && q.to === o.next) {
       // Keep the junction clear: o drives in only once its road out has room for it past the junction.
       const room = Math.hypot(q.x - n.x, q.z - n.z) - ql - Math.abs(o.lane) - JUNCTION - 2 * hl - GAP;
@@ -107,18 +130,16 @@ export function senseTraffic(o: WObj, movers: readonly WObj[], graphs: readonly 
       mx *= k;
       mz *= k;
     }
-    const qx = Math.cos(q.rot);
-    const qz = -Math.sin(q.rot);
     const cos = qx * cx + qz * cz;
     const sin = Math.abs(qx * cz - qz * cx);
     const ac = Math.abs(cos);
-    // q's box, measured across and along o's heading, now and on its way.
-    const ext = hw + ql * sin + qw * ac;
+    // q's box, measured across and along o's heading, now and on its way; a circle while it swings.
+    const ext = hw + (swing ? qr : ql * sin + qw * ac);
     const s0 = dz * cx - dx * cz;
     const s1 = s0 + mz * cx - mx * cz;
     const sweep = (s0 > 0) !== (s1 > 0) ? -ext : Math.min(Math.abs(s0), Math.abs(s1)) - ext;
     if (sweep > SIDE_GAP) continue;
-    const f = along - ql * ac - qw * sin - hl - GAP;
+    const f = along - (swing ? qr : ql * ac + qw * sin) - hl - GAP;
     if (f < free) {
       free = f;
       clear = Math.abs(s0) - ext;

@@ -111,6 +111,8 @@ export class MapBuilder {
   readonly paint: Paint[] = [];
   readonly spawns: Spawn[] = [];
   readonly graphs: MoveGraph[] = [];
+  /** Each graph's neighbours both ways, for spawns: `adj` lists only the ways out on a one-way graph. */
+  private readonly links: number[][][] = [];
   readonly blocks: MapData['blocks'] = [];
   traffic?: Traffic;
   herd?: MapData['herd'];
@@ -284,25 +286,35 @@ export class MapBuilder {
     });
   }
 
-  addGraph(nodes: { x: number; z: number }[], edges: [number, number][]): number {
-    const adj: number[][] = nodes.map(() => []);
+  /**
+   * Adds a graph for graph movers. On a one-way graph they drive each edge only from its first node
+   * to its second, so movers sharing a lane never meet head-on.
+   */
+  addGraph(nodes: { x: number; z: number }[], edges: [number, number][], oneWay = false): number {
+    const links: number[][] = nodes.map(() => []);
+    const adj = oneWay ? nodes.map((): number[] => []) : links;
     for (const [a, b] of edges) {
-      adj[a].push(b);
-      adj[b].push(a);
+      links[a].push(b);
+      links[b].push(a);
+      if (oneWay) adj[a].push(b);
     }
     this.graphs.push({ nodes, adj });
+    this.links.push(links);
     return this.graphs.length - 1;
   }
 
   /** Puts a graph mover at a random edge of the given graph. */
   graphMover(type: string, graph: number, lane: number, speed: number, opts: { tint?: number; flee?: boolean } = {}): void {
     const g = this.graphs[graph];
-    const a = this.rng.int(0, g.nodes.length - 1);
-    if (g.adj[a].length === 0) return;
-    const b = this.rng.pick(g.adj[a]);
+    const links = this.links[graph];
+    let a = this.rng.int(0, g.nodes.length - 1);
+    if (links[a].length === 0) return;
+    let b = this.rng.pick(links[a]);
     const t = this.rng.range(0.15, 0.85);
     const x = g.nodes[a].x + (g.nodes[b].x - g.nodes[a].x) * t;
     const z = g.nodes[a].z + (g.nodes[b].z - g.nodes[a].z) * t;
+    // One-way graph: drive the picked edge its own way from the same spot, with the same draws.
+    if (!g.adj[a].includes(b)) [a, b] = [b, a];
     this.put(type, x, z, 0, {
       tint: opts.tint,
       move: { kind: 'graph', graph, lane, speed: speed * this.rng.range(0.85, 1.15), flee: opts.flee, from: a, to: b },

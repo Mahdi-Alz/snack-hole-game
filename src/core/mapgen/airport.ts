@@ -52,7 +52,7 @@ export function generateAirport(seed: number): MapData {
   b.put('windsock', -100, RUNWAY_Z - 20, 0, { force: true });
   b.put('windsock', 100, RUNWAY_Z - 20, Math.PI, { force: true });
 
-  // Taxi loop for moving planes.
+  // Taxi loop for moving planes: one way round, as they share the centre line.
   const loop = b.addGraph(
     [
       { x: -132, z: RUNWAY_Z },
@@ -66,6 +66,7 @@ export function generateAirport(seed: number): MapData {
       [2, 3],
       [3, 0],
     ],
+    true,
   );
   b.graphMover('jet', loop, 0, 10, { tint: 0x3b82f6 });
   b.graphMover('smallplane', loop, 0, 9, { tint: 0xe84a4a });

@@ -7,7 +7,7 @@ import { generateMap } from '../src/core/mapgen';
 import { MapBuilder } from '../src/core/mapgen/builder';
 import { defaultSave, deserialize, migrate, serialize } from '../src/core/save';
 import { SpatialGrid } from '../src/core/spatial';
-import { ALIVE, FALLING, GONE, World, type WObj } from '../src/core/world';
+import { ALIVE, FALLING, GONE, MV_GRAPH, World, type WObj } from '../src/core/world';
 
 function tinyMap() {
   const b = new MapBuilder('suburb', 100, 1);
@@ -279,6 +279,30 @@ describe('traffic', () => {
     for (const m of moved) expect(m).toBeGreaterThan(100);
   });
 
+  it('planes taxi one way round the airport loop and keep clear as they turn its corners', () => {
+    const map = generateMap('airport');
+    const w = new World(map, cfg(), { demo: true });
+    w.main.x = 0;
+    w.main.z = 150;
+    const planes = w.movers.filter((o) => o.mv === MV_GRAPH && ['jet', 'smallplane', 'jumbo'].includes(OBJECT_TYPES[o.t].id));
+    const n = map.graphs[planes[0].graph].nodes.length;
+    const moved = planes.map(() => 0);
+    let backwards = 0;
+    let worst = -Infinity;
+    for (let f = 0; f < 120 * 60; f++) {
+      const before = planes.map((o) => [o.x, o.z]);
+      w.step(1 / 60);
+      w.events.length = 0;
+      planes.forEach((o, i) => (moved[i] += Math.hypot(o.x - before[i][0], o.z - before[i][1])));
+      for (const o of planes) if (o.to !== (o.from + 1) % n) backwards++;
+      for (let i = 0; i < planes.length; i++) for (let j = i + 1; j < planes.length; j++) worst = Math.max(worst, overlap(planes[i], planes[j]));
+    }
+    expect(planes).toHaveLength(4);
+    expect(backwards).toBe(0);
+    expect(worst).toBeLessThan(0);
+    // Each one went round the loop at least once.
+    for (const m of moved) expect(m).toBeGreaterThan(600);
+  });
 });
 
 describe('placement', () => {

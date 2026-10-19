@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAPS, type MapId } from '../src/config/balance';
 import { generateAirport } from '../src/core/mapgen/airport';
-import type { MapData } from '../src/core/mapgen/builder';
+import { MapBuilder, type MapData } from '../src/core/mapgen/builder';
 import { generateDowntown } from '../src/core/mapgen/downtown';
 import { generateFarm } from '../src/core/mapgen/farm';
 import { generateHarbor } from '../src/core/mapgen/harbor';
@@ -26,7 +26,7 @@ const PINNED: Record<MapId, string> = {
   downtown: '43546087',
   farm: 'c4970a1a',
   harbor: '2eedbd16',
-  airport: 'a5f61d47',
+  airport: 'ecf080b7',
   moon: 'a0480040',
 };
 
@@ -48,6 +48,25 @@ function spawnHash(m: MapData): string {
   }
   return (h >>> 0).toString(16).padStart(8, '0');
 }
+
+describe('graph movers', () => {
+  it('drive a one-way loop its own way, from the spots and with the draws a two-way loop gives them', () => {
+    const loop = (oneWay: boolean) => {
+      const b = new MapBuilder('airport', 200, 7);
+      const nodes = [{ x: -60, z: -20 }, { x: 60, z: -20 }, { x: 60, z: 20 }, { x: -60, z: 20 }];
+      const g = b.addGraph(nodes, [[0, 1], [1, 2], [2, 3], [3, 0]], oneWay);
+      for (let i = 0; i < 8; i++) b.graphMover('car', g, 0, 5);
+      return { b, moves: b.spawns.map((s) => (s.move?.kind === 'graph' ? s.move : null)!) };
+    };
+    const two = loop(false);
+    const one = loop(true);
+    expect(one.b.spawns.map((s) => [s.x, s.z])).toEqual(two.b.spawns.map((s) => [s.x, s.z]));
+    expect(one.moves.map((m) => m.speed)).toEqual(two.moves.map((m) => m.speed));
+    expect(one.b.rng.next()).toBe(two.b.rng.next());
+    expect(two.moves.some((m) => m.to !== (m.from + 1) % 4)).toBe(true);
+    for (const m of one.moves) expect(m.to).toBe((m.from + 1) % 4);
+  });
+});
 
 describe('map generators', () => {
   for (const def of MAPS) {
