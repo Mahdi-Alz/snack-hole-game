@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 5101 --strictPort",
     "play": "vite build --outDir .play --emptyOutDir && vite preview --outDir .play --port 5101 --strictPort",
+    "itch": "tsc --noEmit && vite build --base=./ --outDir itch/build --emptyOutDir && rm -f itch/snack-hole.zip && cd itch/build && zip -qrX ../snack-hole.zip . -x sw.js",
     "test": "vitest run",
     "sim": "tsx scripts/sim.ts",
     "smoke": "node scripts/smoke.mjs"
