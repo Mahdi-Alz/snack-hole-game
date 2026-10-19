@@ -1,5 +1,8 @@
 # Snack Hole
 
+[![Play on GitHub Pages](https://img.shields.io/badge/Play-GitHub%20Pages-24292F?style=for-the-badge&logo=github&logoColor=white)](https://samadipour.github.io/snack-hole-game/)
+[![Play on itch.io](https://img.shields.io/badge/Play-itch.io-FA5C5C?style=for-the-badge&logo=itchdotio&logoColor=white)](https://samadipoor.itch.io/snack-hole)
+
 A hole roams a bright low-poly world and swallows everything smaller than itself — cones, people,
 cars, houses, skyscrapers, cargo ships, jumbo jets — feeding a deep incremental meta-game.
 
@@ -41,7 +44,7 @@ Gamepads work too: stick or d-pad steers, A / X / Y for abilities, Start pauses.
 
 ## Development
 
-In `npm run dev`, press **`** (backtick) for the debug panel. URL flags for testing:
+In `npm run dev`, press **`` ` ``** (backtick) for the debug panel. URL flags for testing:
 `?mute&fresh&seed=7` (see `src/dev/flags.ts`).
 
 [DESIGN.md](DESIGN.md) covers the economy, pacing and architecture; [CREDITS.md](CREDITS.md)
