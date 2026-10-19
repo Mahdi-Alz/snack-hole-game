@@ -9,6 +9,7 @@ Snack Hole is a hole-swallows-the-world browser game with an incremental meta-ga
 - `npm test`: vitest. One file: `npx vitest run tests/economy.test.ts`. One test: add `-t "<test name>"`.
 - `npm run sim -- --human --runs 6 --report`: headless balance sim that prints PASS/FAIL pacing targets. Run it after changing `src/config/balance.ts`. DESIGN.md's pacing table comes from this report.
 - Pushing to `main` deploys GitHub Pages (`.github/workflows/pages.yml` runs `npm test`, then builds with `--base=/<repo>/`). Build public asset URLs from `import.meta.env.BASE_URL`, as `src/audio/music.ts` does.
+- `npm run itch`: relative-path build in `itch/build/` without the service worker, zipped to `itch/snack-hole.zip` (gitignored). Pushing to `main` also pushes that build to itch.io with butler (`.github/workflows/itch.yml`, channel `samadipoor/snack-hole:html5`, needs the `BUTLER_API_KEY` repo secret).
 
 ## Architecture
 
