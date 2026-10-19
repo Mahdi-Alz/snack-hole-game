@@ -8,8 +8,9 @@ Snack Hole is a hole-swallows-the-world browser game with an incremental meta-ga
 - `npm run build`: `tsc --noEmit`, then the Vite build into `dist/`. There is no linter; `npx tsc --noEmit` is the type check.
 - `npm test`: vitest. One file: `npx vitest run tests/economy.test.ts`. One test: add `-t "<test name>"`.
 - `npm run sim -- --human --runs 6 --report`: headless balance sim that prints PASS/FAIL pacing targets. Run it after changing `src/config/balance.ts`. DESIGN.md's pacing table comes from this report.
-- Pushing to `main` deploys GitHub Pages (`.github/workflows/pages.yml` runs `npm test`, then builds with `--base=/<repo>/`). Build public asset URLs from `import.meta.env.BASE_URL`, as `src/audio/music.ts` does.
-- `npm run itch`: relative-path build in `itch/build/` without the service worker, zipped to `itch/snack-hole.zip` (gitignored). Pushing to `main` also pushes that build to itch.io with butler (`.github/workflows/itch.yml`, channel `samadipoor/snack-hole:html5`, needs the `BUTLER_API_KEY` repo secret).
+- `npm run itch`: relative-path build in `itch/build/` without the service worker, zipped to `itch/snack-hole.zip` (gitignored).
+- Pushing to `main` deploys (`.github/workflows/deploy.yml`). One job runs `npm test` once, then builds both targets: GitHub Pages with `--base=/<repo>/`, and itch.io with `npm run itch`. Two jobs then deploy in parallel: Pages, and the itch build pushed with butler (channel `samadipoor/snack-hole:html5`, needs the `BUTLER_API_KEY` repo secret). Build public asset URLs from `import.meta.env.BASE_URL`, as `src/audio/music.ts` does.
+- Skipping a deploy: pushes that only touch `*.md`, `LICENSE` or `screenshots/` deploy nothing (`paths-ignore`). For other pushes that need no new version (tests, scripts, tooling), put `[skip ci]` in the message of the last commit pushed; GitHub checks only that commit. To deploy later without a new commit, run the workflow by hand (`gh workflow run deploy.yml`).
 
 ## Architecture
 

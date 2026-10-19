@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  # Docs-only pushes skip the deploy. Any other push can skip it with [skip ci] in the head commit message.
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - LICENSE
+      - screenshots/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; let a running deploy finish instead of cancelling it.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  # Tests once, then both builds; the deploy jobs below run in parallel from their artifacts.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - id: pages
+        uses: actions/configure-pages@v6
+      # Pages serves the game under /<repo>/, not /. SITE_URL makes the link-preview image URL absolute.
+      - run: npm run build -- --base=/${{ github.event.repository.name }}/
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}/
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+      # Relative-path build in itch/build (npm run itch), without the service worker.
+      - run: npm run itch
+      - uses: actions/upload-artifact@v7
+        with:
+          name: itch-build
+          path: itch/build
+          retention-days: 1
+
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  itch:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: itch-build
+          path: itch/build
+      - name: Install butler
+        run: |
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d "$RUNNER_TEMP/butler"
+          chmod +x "$RUNNER_TEMP/butler/butler"
+          echo "$RUNNER_TEMP/butler" >> "$GITHUB_PATH"
+      # The html5 channel is the browser-played upload on https://samadipoor.itch.io/snack-hole.
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: butler push itch/build samadipoor/snack-hole:html5 --userversion "${GITHUB_SHA::7}"
