@@ -57,7 +57,10 @@ from that round. Ending it from the pause menu does count.
 - Size ladders: after generation, `fillLadder` (`core/mapgen/ladder.ts`) shrinks a few props from
   the next tier up into any size level that has nothing new to eat, then closes gaps left right
   below lone landmarks by shrinking everything above them. A test keeps every map's ladder free
-  of gaps longer than one level.
+  of gaps longer than one level. The ladder test does not check distance, so the next step also
+  has to sit near the start: the airport apron carries forklifts, big baggage dollies, follow-me
+  cars and service vans for sizes 8–11, otherwise those sizes stalled for 10–30 s per level while
+  the hole crossed to the landside trees.
 - Solid props (buildings, vehicles, silos, domes…: `solid` in `objects.ts`) block placement:
   scatter never puts props inside them, forced layouts drop small props whose core lands inside
   a solid 1.5x bigger, and wandering animals/people walk around them (1 m blocking raster that
@@ -149,7 +152,7 @@ is selected). Later maps also need Singularities.
 | Happy Farm | Suburb goal | 20 | 6 | 8 | 0.81 |
 | Downtown | Farm goal | 26 | 45 | 16 | 0.62 |
 | Harbor | Downtown goal | 25 | 236 | 22 | 0.47 |
-| Airport | Harbor goal + 1 Singularity | 28 | 1,000 | 31 | 1 |
+| Airport | Harbor goal + 1 Singularity | 28 | 1,000 | 31 | 0.8 |
 | Moon Base | Airport goal + 3 Singularities | 26 | 1,400 | 35 | 0.81 |
 
 Offsets were picked so you enter each map near the bottom of its size ladder with the Starting
@@ -214,24 +217,24 @@ round's level-up times, `--seed` changes the world seeds.
 | Harbor | 33:00 |
 | first Singularity (+8 DM) | 44:20 |
 | Airport (run 2) | 1h 09m |
-| Moon Base (run 4) | 2h 11m |
-| first tier (run 4 collapse) | 2h 26m |
+| Moon Base (run 4) | 2h 24m |
+| first tier (run 4 collapse) | 3h 04m |
 
-Targets met in the latest report (12/17): first size-up ≤ 5 s (3.7 s), 4–8 s per level (4.2 s),
-last level ≤ 1.5x the first (0.83x; the first size-up is scaled to a full level's XP), no dead
-time, 1–3 purchases per shop visit (3), 90% of visits buying something or able to after one more
-round, counting cash left over (94%), Starting Size costing 0.3–1.5 rounds (0.62), first
+Targets met in the latest report (11/17): first size-up ≤ 5 s (3.7 s), 4–8 s per level (4.1 s),
+last level ≤ 1.5x the first (0.92x; the first size-up is scaled to a full level's XP), no dead
+time, 1–3 purchases per shop visit (2), Starting Size costing 0.3–1.5 rounds (0.92), first
 Singularity at 44 min, run 2 back to Harbor in 46% of run 1's time, DM per run growing at most x2
-(8, 5, 7, 10, 17, 26), all maps at 2h 11m, 8 h offline = 4 rounds. `--seed 2` gives 11 and
-`--seed 3` 10 (13 and 12 while the first round was a 20 s warm-up: a full first round pays ~$500,
-so early shop visits buy 3–4 levels); any change to the sim's random draws reshuffles which
-borderline targets pass. Misses: radius growth per round 6.6x (target 3–5x, which needs 7+ s per
-level in a 100 s round, and Downtown/Harbor goals sit 16–20 sizes above their entry level);
-cheapest option left 0.47 rounds of income (target 1–3: run 1 income doubles every round across
+(8, 7, 8, 12, 18, 27), all maps at 2h 24m, 8 h offline = 4 rounds. `--seed 2` gives 12 and
+`--seed 3` 10; any change to the sim's random draws reshuffles which borderline targets pass.
+Misses: radius growth per round 7.4x (target 3–5x, which needs 7+ s per level in a 100 s round,
+and Downtown/Harbor goals sit 16–20 sizes above their entry level); 90% of visits buying something
+or able to after one more round, counting cash left over (83%: late runs spend many rounds on
+cleared maps with only Starting Size left to buy, until the sim's +50% DM rule lets it collapse);
+cheapest option left 0.81 rounds of income (target 1–3: run 1 income doubles every round across
 ~10 open tracks and later runs buy 10–30 levels per visit on the early maps); 4–8 rounds per map
-in run 1 (4, 6, 9: Downtown took 9); run 3 reaches the Airport in 56% of run 2's time (target
+in run 1 (4, 6, 9: Downtown took 9); run 3 reaches the Airport in 63% of run 2's time (target
 25–55%: each run adds only ~+50% DM, about 1.3x income, and both runs clear the early maps at
-about one round per map); skill band 1.10–1.78x (target 1.5–3: a 1.4-skill bot gains only 0.5–2
+about one round per map); skill band 1.01–1.57x (target 1.5–3: a 1.4-skill bot gains only 0.5–2
 more sizes per round than a 0.6-skill one, so the band is mostly round-to-round noise).
 
 ## Architecture

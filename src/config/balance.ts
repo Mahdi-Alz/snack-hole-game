@@ -225,7 +225,7 @@ export const MAPS: MapDef[] = [
   { id: 'farm', name: 'Happy Farm', icon: '🚜', blurb: 'Barns, fields and lots of animals.', goal: 19, needsSingularities: 0, valueMul: 6, sizeOffset: 8, xpMul: 0.81, seed: 3303 },
   { id: 'downtown', name: 'Downtown', icon: '🏙️', blurb: 'Busy avenues and towering skyscrapers.', goal: 25, needsSingularities: 0, valueMul: 45, sizeOffset: 16, xpMul: 0.62, seed: 2202 },
   { id: 'harbor', name: 'Harbor', icon: '⚓', blurb: 'Containers, cranes and giant ships.', goal: 24, needsSingularities: 0, valueMul: 236, sizeOffset: 22, xpMul: 0.47, seed: 4404 },
-  { id: 'airport', name: 'Airport', icon: '✈️', blurb: 'Jets, hangars and a huge terminal.', goal: 27, needsSingularities: 1, valueMul: 1000, sizeOffset: 31, xpMul: 1, seed: 5505 },
+  { id: 'airport', name: 'Airport', icon: '✈️', blurb: 'Jets, hangars and a huge terminal.', goal: 27, needsSingularities: 1, valueMul: 1000, sizeOffset: 31, xpMul: 0.8, seed: 5505 },
   { id: 'moon', name: 'Moon Base', icon: '🌙', blurb: 'Low gravity, big domes, suspicious cheese.', goal: 25, needsSingularities: 3, valueMul: 1400, sizeOffset: 35, xpMul: 0.81, seed: 6606 },
 ];
 

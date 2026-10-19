@@ -185,6 +185,14 @@ export function generateAirport(seed: number): MapData {
     b.scatter(() => rng.weighted([['bush', 3], ['tree', 2], ['rock', 1]] as [string, number][]), g, Math.floor(area / 60), { scale: [0.7, 1.2] });
   }
 
+  // Ground-service vehicles on the apron: the growth steps between the luggage carts (size 6) and
+  // the car parks (size 11), which would otherwise all be landside or past the runway, far from
+  // the start. Placed last so the rest of the layout keeps its random draws.
+  b.scatter('forklift', apronInner, 18, { scale: [1.2, 1.45] });
+  b.scatter('luggagecart', apronInner, 16, { scale: [1.3, 1.6] });
+  b.scatter('car', apronInner, 12, { scale: [0.88, 1], tint: () => b.tint([0xf5c542, 0xffffff]) });
+  b.scatter('van', apronInner, 10, { scale: [0.88, 0.98], tint: () => b.tint([0xffffff, 0xf5c542]) });
+
   return b.build(
     '#9fd06e',
     '#8cc15e',
