@@ -126,8 +126,10 @@ export class GameRenderer {
       this.dpr = window.devicePixelRatio;
       this.resize();
     }
-    if (this.quality !== 'auto' || dt <= 0 || dt >= 0.09) return;
-    this.avgFrame += (dt - this.avgFrame) * 0.1;
+    if (this.quality !== 'auto' || dt <= 0) return;
+    // A long frame counts as at most 50 ms: one hitch (GC, tab coming back) cannot step the
+    // quality down, but a device that never gets under the game's 0.1 s frame cap still does.
+    this.avgFrame += (Math.min(dt, 0.05) - this.avgFrame) * 0.1;
     this.slowFor = this.avgFrame > SLOW_FRAME ? this.slowFor + dt : 0;
     if (this.slowFor < SLOW_FOR || this.pixelRatio() <= MIN_PIXEL_RATIO) return;
     this.autoRatio = Math.max(MIN_PIXEL_RATIO, this.pixelRatio() - 0.25);

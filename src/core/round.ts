@@ -1,4 +1,4 @@
-import { MAP_CLEARED_FRACTION, ROUND, type MapId } from '../config/balance';
+import { MAP_CLEARED_FRACTION, type MapId } from '../config/balance';
 import { OBJECT_TYPES } from '../config/objects';
 import { earn, noteRound, unlockMaps } from './economy';
 import type { SaveData } from './save';
@@ -23,9 +23,8 @@ export interface RoundSummary {
 
 /** What settling a round changed, for the results screen. */
 export interface RoundSettlement {
-  /** Cash credited: the round's cash plus the warm-up top-up. */
+  /** Cash credited: the round's cash. */
   total: number;
-  warmupBonus: number;
   /** New best combo (not reported on the first round, nor for tiny combos). */
   bestCombo: boolean;
   /** New best round cash (not reported on the first round). */
@@ -56,14 +55,11 @@ export function summarizeRound(w: World): RoundSummary {
 }
 
 /**
- * Books a finished round into the save: cash (with the warm-up top-up), stats and records,
- * Gulpedia counts, the map's best share and size, recent income, and any maps it unlocks.
- * Achievements are left to the caller.
+ * Books a finished round into the save: cash, stats and records, Gulpedia counts, the map's best
+ * share and size, recent income, and any maps it unlocks. Achievements are left to the caller.
  */
 export function settleRound(s: SaveData, r: RoundSummary): RoundSettlement {
-  // Warm-up safety net: a brand-new player can always afford a first upgrade.
-  const warmupBonus = s.stats.rounds === 0 ? Math.max(0, ROUND.warmupMinCash - r.cash) : 0;
-  const total = r.cash + warmupBonus;
+  const total = r.cash;
   earn(s, total);
   const st = s.stats;
   st.rounds += 1;
@@ -93,5 +89,5 @@ export function settleRound(s: SaveData, r: RoundSummary): RoundSettlement {
   // Reaching a map's size goal unlocks the next one; jump straight to it.
   const unlockedMaps = unlockMaps(s);
   for (const id of unlockedMaps) s.selectedMap = id;
-  return { total, warmupBonus, bestCombo, bestRound, bestPercent, cleared, completed, discovered, unlockedMaps };
+  return { total, bestCombo, bestRound, bestPercent, cleared, completed, discovered, unlockedMaps };
 }

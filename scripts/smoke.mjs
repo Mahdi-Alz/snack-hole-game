@@ -30,7 +30,7 @@ async function run(viewport, prefix) {
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `screenshots/${prefix}-01-hub.png` });
 
-  // Round 1 (warm-up), sped up with the debug time warp.
+  // Round 1, sped up with the debug time warp.
   await page.click('.play-btn', { force: true });
   await page.waitForTimeout(600);
   await page.evaluate(() => (window.game.warp = 4));

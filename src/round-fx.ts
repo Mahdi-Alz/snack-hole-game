@@ -101,7 +101,6 @@ export class RoundFeedback {
       {
         cash: r.total,
         helperCash: w.helperCash,
-        bonus: r.warmupBonus,
         timeBonus: w.timeBonus,
         endReason: w.endReason ?? 'timeUp',
         eaten: w.eaten + w.helperEaten,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAP_CLEARED_FRACTION, MAPS, ROUND } from '../src/config/balance';
+import { MAP_CLEARED_FRACTION, MAPS } from '../src/config/balance';
 import { OBJECT_TYPES } from '../src/config/objects';
 import { settleRound, type RoundSummary } from '../src/core/round';
 import { defaultSave } from '../src/core/save';
@@ -17,27 +17,18 @@ const round = (over: Partial<RoundSummary> = {}): RoundSummary => ({
 });
 
 describe('settleRound', () => {
-  it('tops up a poor warm-up round, and only the first round', () => {
+  it('credits each round its own cash, the first one included', () => {
     const s = defaultSave(0);
     const first = settleRound(s, round({ cash: 10 }));
-    expect(first.warmupBonus).toBe(ROUND.warmupMinCash - 10);
-    expect(first.total).toBe(ROUND.warmupMinCash);
-    expect(s.cash).toBe(ROUND.warmupMinCash);
-    expect(s.stats.bestRoundCash).toBe(ROUND.warmupMinCash);
-    expect(s.recentRoundCash).toEqual([ROUND.warmupMinCash]);
+    expect(first.total).toBe(10);
+    expect(s.cash).toBe(10);
+    expect(s.stats.bestRoundCash).toBe(10);
+    expect(s.recentRoundCash).toEqual([10]);
 
     const second = settleRound(s, round({ cash: 5 }));
-    expect(second.warmupBonus).toBe(0);
     expect(second.total).toBe(5);
-    expect(s.cash).toBe(ROUND.warmupMinCash + 5);
+    expect(s.cash).toBe(15);
     expect(s.stats.rounds).toBe(2);
-  });
-
-  it('pays a good warm-up round as is', () => {
-    const s = defaultSave(0);
-    const r = settleRound(s, round({ cash: ROUND.warmupMinCash + 1 }));
-    expect(r.warmupBonus).toBe(0);
-    expect(r.total).toBe(ROUND.warmupMinCash + 1);
   });
 
   it('keeps records and reports new bests after the first round', () => {

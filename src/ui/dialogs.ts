@@ -220,7 +220,6 @@ export function confirmDialog(title: string, body: string, yes: string, onYes: (
 export interface RoundResult {
   cash: number;
   helperCash: number;
-  bonus: number;
   /** Paid for finishing early; included in `cash`. */
   timeBonus: number;
   endReason: EndReason;
@@ -262,7 +261,6 @@ export function showResults(r: RoundResult, onContinue: () => void): void {
     cashEl,
     r.timeBonus > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.timeBonus)} time bonus for finishing early`) : null,
     r.helperCash > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.helperCash)} from helper holes`) : null,
-    r.bonus > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.bonus)} warm-up bonus — go buy an upgrade!`) : null,
     h(
       'div',
       { class: 'res-grid' },

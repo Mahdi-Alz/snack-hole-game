@@ -21,8 +21,8 @@ This file describes the formulas; the config is the source of truth.
    Gulpedia entries, records) → hub → shop → Play again.
 7. Reaching a map's **size goal** unlocks the next map and switches to it.
 
-The very first round is a 20 s warm-up (topped up to $30 if the player barely ate anything) so
-the first upgrade is bought ~30–40 s after starting.
+A round only counts once it ends: closing the tab (or the phone killing it) mid-round keeps nothing
+from that round. Ending it from the pause menu does count.
 
 ### Round length and early finish
 
@@ -75,7 +75,7 @@ the first upgrade is bought ~30–40 s after starting.
 - **Golden props**: every prop rolls `1% + 1% * GoldenTouchLvl` (9% at the max level 8) to spawn golden each
   round: worth x10, drawn in gold with a moving glint and sparkles, coin ding + gold floater on
   swallow. Results show how many you ate (✨).
-- **Random events** (rounds only, not the warm-up): at round start each event rolls its chance
+- **Random events** (rounds only, not the hub demo): at round start each event rolls its chance
   (rush hour 30%, UFO 25%, stampede 35% on the farm). Hits play one at a time, the first 8–16 s in
   and the next 4–8 s after the previous ends, while ≥ 12 s remain. Measured: ~50% of rounds have
   an event (~68% on the farm), even with the base 60 s round.
@@ -207,31 +207,32 @@ round's level-up times, `--seed` changes the world seeds.
 
 | Event (human model) | Time |
 |---|---|
-| Growth Rate, Magnet | 3:20 |
-| Happy Farm | 6:10 |
-| first helper | 7:40 |
-| Downtown | 18:00 |
-| Harbor | 31:39 |
-| first Singularity (+7 DM) | 41:38 |
-| Airport (run 2) | 1h 01m |
+| Growth Rate, Magnet | 2:40 |
+| Happy Farm | 5:30 |
+| first helper | 7:00 |
+| Downtown | 15:30 |
+| Harbor | 33:00 |
+| first Singularity (+8 DM) | 44:20 |
+| Airport (run 2) | 1h 09m |
 | Moon Base (run 4) | 2h 11m |
-| first tier (run 4 collapse) | 2h 41m |
+| first tier (run 4 collapse) | 2h 26m |
 
-Targets met in the latest report (12/17): first size-up ≤ 5 s (3.5 s), 4–8 s per level (4.1 s),
-last level ≤ 1.5x the first (1.05x; the first size-up is scaled to a full level's XP), no dead
-time, 1–3 purchases per shop visit (2), Starting Size costing 0.3–1.5 rounds (0.73), 4–8 rounds
-per map in run 1 (5, 7, 7), first Singularity at 42 min, run 2 back to Harbor in 43% of run 1's
-time, DM per run growing at most x2 (7, 7, 7, 11, 16, 30), all maps at 2h 11m, 8 h offline = 4
-rounds. `--seed 2` gives 13 and `--seed 3` 12; any change to the sim's random draws reshuffles
-which borderline targets pass. Misses: radius growth per round 7.4x (target 3–5x, which needs
-7+ s per level in a 100 s round, and Downtown/Harbor goals sit 16–20 sizes above their entry
-level); 85% of visits buy something or can after one more round, counting cash left over
-(target 90%; 85–90% across seeds 1–3); cheapest option left 0.71 rounds of income (target 1–3:
-run 1 income doubles every round across ~10 open tracks and later runs buy 10–30 levels per visit
-on the early maps); run 3 reaches the Airport in 78% of run 2's time (target 25–55%: each run
-adds only ~+50% DM, about 1.3x income, and both runs clear the early maps at about one round per
-map); skill band 1.22–1.48x (target 1.5–3: a 1.4-skill bot gains only 0.5–2 more sizes per round
-than a 0.6-skill one, so the band is mostly round-to-round noise).
+Targets met in the latest report (12/17): first size-up ≤ 5 s (3.7 s), 4–8 s per level (4.2 s),
+last level ≤ 1.5x the first (0.83x; the first size-up is scaled to a full level's XP), no dead
+time, 1–3 purchases per shop visit (3), 90% of visits buying something or able to after one more
+round, counting cash left over (94%), Starting Size costing 0.3–1.5 rounds (0.62), first
+Singularity at 44 min, run 2 back to Harbor in 46% of run 1's time, DM per run growing at most x2
+(8, 5, 7, 10, 17, 26), all maps at 2h 11m, 8 h offline = 4 rounds. `--seed 2` gives 11 and
+`--seed 3` 10 (13 and 12 while the first round was a 20 s warm-up: a full first round pays ~$500,
+so early shop visits buy 3–4 levels); any change to the sim's random draws reshuffles which
+borderline targets pass. Misses: radius growth per round 6.6x (target 3–5x, which needs 7+ s per
+level in a 100 s round, and Downtown/Harbor goals sit 16–20 sizes above their entry level);
+cheapest option left 0.47 rounds of income (target 1–3: run 1 income doubles every round across
+~10 open tracks and later runs buy 10–30 levels per visit on the early maps); 4–8 rounds per map
+in run 1 (4, 6, 9: Downtown took 9); run 3 reaches the Airport in 56% of run 2's time (target
+25–55%: each run adds only ~+50% DM, about 1.3x income, and both runs clear the early maps at
+about one round per map); skill band 1.10–1.78x (target 1.5–3: a 1.4-skill bot gains only 0.5–2
+more sizes per round than a 0.6-skill one, so the band is mostly round-to-round noise).
 
 ## Architecture
 
@@ -262,8 +263,7 @@ src/
                music.ts: one CC0 track per map from public/music/ (CREDITS.md), looped
                gaplessly, cross-faded on map change, quieter in the hub, ducked while paused
   dev/         dev-only URL testing flags (?mute, ?fresh, ?save=NAME, ?seed=N) and fixture saves
-  game.ts      state machine (hub → round → results), autosave (with the running round's cash),
-               offline, purchases, crash guard
+  game.ts      state machine (hub → round → results), autosave, offline, purchases, crash guard
   persistence.ts  SaveStore: localStorage (memory for dev test saves), backup, damaged-save copy,
                one saving tab, warning when the browser refuses a write
   round-fx.ts  RoundFeedback: world events → sounds, particles, banners, floaters, shake,

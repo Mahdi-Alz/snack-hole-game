@@ -81,16 +81,12 @@ describe('upgrades', () => {
 });
 
 describe('rounds', () => {
-  it('first round is a short warm-up', () => {
-    const s = defaultSave(0);
-    expect(roundTimeFor(s)).toBe(ROUND.warmupTime);
-    s.stats.rounds = 1;
-    expect(roundTimeFor(s)).toBe(ROUND.baseTime);
+  it('every round, the first included, lasts the base time until Round Time is bought', () => {
+    expect(roundTimeFor(defaultSave(0))).toBe(ROUND.baseTime);
   });
 
   it('Round Time tops out at 100 seconds', () => {
     const s = defaultSave(0);
-    s.stats.rounds = 1;
     s.upgrades.roundTime = UPGRADES.find((u) => u.id === 'roundTime')!.max;
     expect(roundTimeFor(s)).toBe(100);
   });

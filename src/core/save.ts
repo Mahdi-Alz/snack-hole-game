@@ -78,11 +78,6 @@ export interface SaveData {
   flags: Record<string, boolean>;
   stats: Stats;
   settings: Settings;
-  /**
-   * Cash eaten in a round that was still running at the last save. Credited on the next start,
-   * so closing the tab (or the phone killing it) mid-round keeps what you ate.
-   */
-  pendingRoundCash: number;
   lastSeen: number;
   created: number;
 }
@@ -142,7 +137,6 @@ export function defaultSave(now = Date.now()): SaveData {
       floaters: true,
       quality: 'auto',
     },
-    pendingRoundCash: 0,
     lastSeen: now,
     created: now,
   };
@@ -260,7 +254,8 @@ export function looksLikeSave(raw: unknown): boolean {
 }
 
 export function serialize(save: SaveData): string {
-  return JSON.stringify(save);
+  // JSON writes Infinity as null, which loads back as 0: store the largest finite number instead.
+  return JSON.stringify(save, (_, v: unknown) => (v === Infinity ? Number.MAX_VALUE : v));
 }
 
 /**

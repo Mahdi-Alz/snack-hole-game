@@ -3,7 +3,7 @@ import { Audio } from './audio/audio';
 import { checkAchievements } from './core/achievements';
 import { Bot } from './core/bot';
 import * as eco from './core/economy';
-import { formatCash, formatNumber, setScientific } from './core/format';
+import { formatNumber, setScientific } from './core/format';
 import { generateMap } from './core/mapgen';
 import { settleRound, summarizeRound } from './core/round';
 import { encodeSaveText, serialize, type SaveData } from './core/save';
@@ -11,7 +11,7 @@ import { World } from './core/world';
 import { devFlags } from './dev/flags';
 import { SaveStore } from './persistence';
 import { GameRenderer } from './render/scene';
-import { prewarmThumbs } from './render/thumbs';
+import { pauseThumbs, prewarmThumbs } from './render/thumbs';
 import { RoundFeedback, type GameState } from './round-fx';
 import { applySettings, openSettingsDialog } from './settings-flow';
 import type { DebugPanel } from './ui/debug';
@@ -103,11 +103,10 @@ export class Game implements HubApi {
     const now = Date.now();
     const off = eco.computeOffline(this.save, now);
     this.enterHub();
-    this.recoverPendingRound();
     this.creditOffline(off);
     this.store.reportUnreadable();
     this.grantAchievements();
-    // Store the credited offline time and recovered round now, so a quick reload cannot pay them twice.
+    // Store the credited offline time now, so a quick reload cannot pay it twice.
     this.persist();
     requestAnimationFrame((t) => this.frame(t));
   }
@@ -134,21 +133,14 @@ export class Game implements HubApi {
     showOffline(off.awaySeconds, off.creditedSeconds, off.earned, off.awaySeconds > off.creditedSeconds);
   }
 
-  /** Saves now; false when this tab has stopped saving or the browser refused the write. */
+  /**
+   * Saves now; false when this tab has stopped saving or the browser refused the write. A round
+   * only counts once it ends, so a tab closed (or killed) mid-round keeps nothing from it.
+   */
   persist(): boolean {
     if (this.store.stale) return false;
     this.save.lastSeen = Date.now();
-    this.save.pendingRoundCash = this.state === 'round' && this.world ? this.world.cash : 0;
     return this.store.write(this.save);
-  }
-
-  /** Credits the cash of a round that was still running when the game last saved. */
-  private recoverPendingRound(): void {
-    const cash = this.save.pendingRoundCash;
-    if (!(cash > 0)) return;
-    this.save.pendingRoundCash = 0;
-    eco.earn(this.save, cash);
-    toast('Unfinished round', `+${formatCash(cash)} from the round you left`, { icon: '💰' });
   }
 
   private onContextLost(): void {
@@ -170,7 +162,6 @@ export class Game implements HubApi {
   private replaceSave(next: SaveData): boolean {
     if (!this.store.writeBackup(this.save)) return false;
     this.save = next;
-    this.recoverPendingRound();
     applySettings(this.save.settings, this.audio, this.renderer);
     this.renderer.setSkin(this.currentSkin());
     this.grantAchievements();
@@ -188,6 +179,7 @@ export class Game implements HubApi {
   private setState(st: GameState): void {
     this.state = st;
     document.body.classList.toggle('in-round', st !== 'hub');
+    pauseThumbs(st === 'round');
   }
 
   private enterHub(): void {

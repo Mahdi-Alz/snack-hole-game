@@ -158,7 +158,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .hud-pause { width: 44px; height: 44px; font-size: 17px; }
 .pause { text-align: center; min-width: 260px; }
 .pause .btn.big { margin: 6px 0 4px; }
-.hud-combo { position: absolute; top: 76px; left: 50%; transform: translateX(-50%) scale(.6); opacity: 0; text-align: center; transition: opacity .2s, transform .2s; }
+.hud-combo { position: absolute; top: calc(76px + var(--sat)); left: 50%; transform: translateX(-50%) scale(.6); opacity: 0; text-align: center; transition: opacity .2s, transform .2s; }
 .hud-combo.active { opacity: 1; transform: translateX(-50%) scale(1); }
 .combo-text { font-size: 30px; font-weight: 900; color: #fff; text-shadow: 0 3px 0 #e8590c, 0 0 18px rgba(255, 140, 40, .7); }
 .hud-combo.hot .combo-text { color: #fff7c2; animation: wiggle .3s ease-in-out infinite alternate; }
@@ -180,9 +180,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .floater.gold { color: #ffe066; text-shadow: 0 2px 0 #a8740b, 0 0 12px rgba(255, 210, 61, .85); animation-duration: 1.2s; }
 .floater.combo { color: #ffd166; text-shadow: 0 3px 0 #b5179e; animation-duration: 1.4s; }
 @keyframes floatUp { 0% { opacity: 0; transform: translate(-50%, -30%) scale(.6); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -260%) scale(1); } }
-.banner { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); text-align: center; opacity: 0; pointer-events: none; }
+.banner { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); width: max-content; max-width: 88vw; text-align: center; opacity: 0; pointer-events: none; }
 .banner.show { animation: banner 1.6s ease-out forwards; }
-.banner-main { font-size: 64px; font-weight: 900; color: #fff; text-shadow: 0 5px 0 var(--violet-dark), 0 0 30px rgba(140, 90, 255, .8); letter-spacing: 2px; white-space: nowrap; }
+.banner-main { font-size: 64px; font-weight: 900; color: #fff; text-shadow: 0 5px 0 var(--violet-dark), 0 0 30px rgba(140, 90, 255, .8); letter-spacing: 2px; line-height: 1.1; text-wrap: balance; }
 .banner-sub { font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
 .banner.small .banner-main { font-size: 40px; }
 .banner.small { top: 24%; }
@@ -286,7 +286,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
   .size-snack { font-size: 11px; max-width: 120px; }
   .hud-cash { font-size: 18px; padding: 4px 12px; }
   .hud-pct { font-size: 11px; }
-  .hud-combo { top: 100px; }
+  .hud-combo { top: calc(100px + var(--sat)); }
   .combo-text { font-size: 22px; }
   .ab-btn { width: 58px; height: 58px; }
   .banner-main { font-size: 40px; }
@@ -320,7 +320,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
   .size-ring { width: 40px; height: 40px; }
   .size-num { width: 31px; height: 31px; font-size: 14px; }
   .hud-cash { font-size: 18px; padding: 3px 12px; }
-  .hud-combo { top: 50px; }
+  .hud-combo { top: calc(50px + var(--sat)); }
   .combo-text { font-size: 22px; }
   .ab-btn { width: 54px; height: 54px; }
   .ab-icon { font-size: 24px; }

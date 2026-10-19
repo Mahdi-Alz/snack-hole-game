@@ -40,9 +40,6 @@ export const VALUE = { coef: 6, exp: 1.3, heightDiv: 20 };
 
 export const ROUND = {
   baseTime: 60,
-  warmupTime: 20,
-  /** The warm-up round is topped up to at least this much cash, so a first upgrade is always affordable. */
-  warmupMinCash: 30,
   perLevel: 10,
 };
 
@@ -122,7 +119,7 @@ export const UPGRADES: UpgradeDef[] = [
 export const GOLDEN = { baseChance: 0.01, chancePerLevel: 0.01, valueMul: 10 };
 
 /**
- * In-round random events (not in the hub demo or the warm-up). At round start each event the map
+ * In-round random events (not in the hub demo). At round start each event the map
  * supports rolls its `chance`; the ones that hit play one at a time, the first after `firstAt`
  * seconds and the next `gap` seconds after the previous ends, while at least `minLeft` seconds
  * remain (an event that no longer fits is skipped).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HELPERS, OFFLINE, SAVE_VERSION, UPGRADES } from '../src/config/balance';
-import { buildRoundConfig, cashBreakdown } from '../src/core/economy';
+import { buildRoundConfig, cashBreakdown, earn } from '../src/core/economy';
 import { decodeSaveText, defaultSave, encodeSaveText, looksLikeSave, migrate, parseSave, serialize } from '../src/core/save';
 
 /** A save as an import or a hand-edited localStorage entry might carry it. */
@@ -101,8 +101,14 @@ describe('save text', () => {
     expect(decodeSaveText(`${encodeSaveText(json).slice(0, 10)}\n${encodeSaveText(json).slice(10)}`)).toBe(json);
   });
 
-  it('keeps the cash of a round that was still running at the last save', () => {
-    expect(edited({ pendingRoundCash: 1234 }).pendingRoundCash).toBe(1234);
-    expect(defaultSave(0).pendingRoundCash).toBe(0);
+  it('keeps overflowing late-game cash at the largest number instead of saving it as 0', () => {
+    const s = defaultSave(0);
+    s.cash = Number.MAX_VALUE;
+    earn(s, Number.MAX_VALUE);
+    expect(s.cash).toBe(Number.MAX_VALUE);
+    s.stats.bestRoundCash = Infinity;
+    const back = parseSave(serialize(s), 0)!;
+    expect(back.cash).toBe(Number.MAX_VALUE);
+    expect(back.stats.bestRoundCash).toBe(Number.MAX_VALUE);
   });
 });

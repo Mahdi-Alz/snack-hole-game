@@ -50,7 +50,7 @@ const withSkill = (s: number): Profile => ({ ...BASE, bot: BASE.bot * s, stick: 
 
 interface RoundStats {
   map: MapId;
-  /** Round cash; when the round is recorded, what the game credits (with the warm-up top-up). */
+  /** Round cash; when the round is recorded, what the game credits. */
   cash: number;
   pct: number;
   startLevel: number;
@@ -99,7 +99,7 @@ function playRound(save: SaveData, p: Profile, record = true): RoundStats {
     unlocked: [],
   };
   if (!record) return stats;
-  // The same bookkeeping as the game's end of round (warm-up top-up, records, map unlocks).
+  // The same bookkeeping as the game's end of round (records, map unlocks).
   const settled = settleRound(save, summarizeRound(w));
   stats.cash = settled.total;
   stats.unlocked = settled.unlockedMaps;
@@ -303,37 +303,36 @@ function report(): void {
   const out: string[] = ['', `=== pacing report (${HUMAN ? 'human' : 'bot'} model, ${RUNS} runs) ===`];
   const checks: [string, string, boolean][] = [];
   const check = (name: string, value: string, ok: boolean) => checks.push([name, value, ok]);
-  const play = rounds.filter((r) => r.round > 1 || r.run > 1); // skip the warm-up round
 
-  const firstUp = median(play.map((r) => r.levelTimes[0] ?? Infinity));
+  const firstUp = median(rounds.map((r) => r.levelTimes[0] ?? Infinity));
   check('first size-up in a round (median)', `${fmt(firstUp)} s`, firstUp <= 5);
 
-  const gaps = play.flatMap((r) => r.levelTimes.map((t, i) => t - (i ? r.levelTimes[i - 1] : 0)));
+  const gaps = rounds.flatMap((r) => r.levelTimes.map((t, i) => t - (i ? r.levelTimes[i - 1] : 0)));
   const spl = median(gaps);
   check('seconds per level (median)', `${fmt(spl)} s`, spl >= 4 && spl <= 8);
   // Rounds start with SIZE.startXp of the first level's XP, so the first size-up only needs the
   // rest: scale its time up to a full level before comparing it with the last one.
   const lastOverFirst = median(
-    play.filter((r) => r.levelTimes.length >= 3).map((r) => {
+    rounds.filter((r) => r.levelTimes.length >= 3).map((r) => {
       const lt = r.levelTimes;
       return (lt[lt.length - 1] - lt[lt.length - 2]) / Math.max(0.5, lt[0] / (1 - SIZE.startXp));
     }),
   );
   check('last level / first level time (median)', `${fmt(lastOverFirst, 2)}x`, lastOverFirst <= 1.5);
 
-  const growth = median(play.map((r) => Math.pow(SIZE.radiusGrowth, r.endLevel - r.startLevel)));
+  const growth = median(rounds.map((r) => Math.pow(SIZE.radiusGrowth, r.endLevel - r.startLevel)));
   check('radius growth per round (median)', `${fmt(growth, 2)}x`, growth >= 3 && growth <= 5);
 
-  const dead = play.map((r) => r.deadTime);
+  const dead = rounds.map((r) => r.deadTime);
   check('dead time (median / 90th pct)', `${fmt(median(dead))} / ${fmt(dead.sort((a, b) => a - b)[Math.floor(dead.length * 0.9)] ?? NaN)} s`, median(dead) <= 2);
 
-  const buys = median(play.map((r) => r.purchases));
+  const buys = median(rounds.map((r) => r.purchases));
   check('purchases per shop visit (median)', fmt(buys), buys >= 1 && buys <= 3);
-  const affordable = play.filter((r) => r.purchases > 0 || r.waitRounds <= 1).length / Math.max(1, play.length);
+  const affordable = rounds.filter((r) => r.purchases > 0 || r.waitRounds <= 1).length / Math.max(1, rounds.length);
   check('visits with a purchase now or within 1 round', `${fmt(affordable * 100, 0)}%`, affordable >= 0.9);
-  const sizeR = median(play.map((r) => r.sizeRounds));
+  const sizeR = median(rounds.map((r) => r.sizeRounds));
   check('next Starting Size / last round income (median)', fmt(sizeR, 2), sizeR >= 0.3 && sizeR <= 1.5);
-  const cheap = median(play.map((r) => r.cheapestRounds));
+  const cheap = median(rounds.map((r) => r.cheapestRounds));
   check('cheapest option left, in rounds of income (median)', fmt(cheap, 2), cheap >= 1 && cheap <= 3);
 
   const r1 = runs[0];

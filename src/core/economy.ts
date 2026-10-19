@@ -385,7 +385,6 @@ export function startLevel(save: SaveData, mapId: MapId = save.selectedMap): num
 }
 
 export function roundTimeFor(save: SaveData): number {
-  if (save.stats.rounds === 0) return ROUND.warmupTime;
   return ROUND.baseTime + ROUND.perLevel * save.upgrades.roundTime;
 }
 
@@ -423,9 +422,10 @@ export function buildRoundConfig(save: SaveData, mapId: MapId = save.selectedMap
 
 export function earn(save: SaveData, amount: number): void {
   if (!(amount > 0)) return;
-  save.cash += amount;
-  save.runCash += amount;
-  save.lifetimeCash += amount;
+  // Endless tiers can overflow; Infinity would also make Infinity-priced (capped) items affordable.
+  save.cash = Math.min(Number.MAX_VALUE, save.cash + amount);
+  save.runCash = Math.min(Number.MAX_VALUE, save.runCash + amount);
+  save.lifetimeCash = Math.min(Number.MAX_VALUE, save.lifetimeCash + amount);
 }
 
 export function buyUpgrade(save: SaveData, id: UpgradeId, n: number): number {

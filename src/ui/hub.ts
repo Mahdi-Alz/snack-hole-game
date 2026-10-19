@@ -157,7 +157,7 @@ export class Hub {
     setText(
       this.playInfo,
       first
-        ? 'Warm-up round · 20s · steer with mouse, touch or WASD'
+        ? `${roundTimeFor(s)}s · steer with mouse, touch or WASD`
         : `${roundTimeFor(s)}s · start size ${startLevel(s) + 1} · ${goalText(s)}`,
     );
     for (const c of this.cards) c.update();

@@ -8,6 +8,10 @@ let initFailed = false;
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let mesh: THREE.InstancedMesh;
+/** One material for every thumbnail, so its shader compiles once instead of once per thumbnail. */
+let material: THREE.Material;
+/** Background thumbnails wait while set (during rounds), so they never cost a round frame. */
+let paused = false;
 /** Data URLs keyed by `type:tint` (tint changes the colour of tintable parts). */
 const cache = new Map<string, string>();
 const SIZE = 96;
@@ -31,6 +35,12 @@ function init(): void {
   sun.position.set(-3, 5, 4);
   scene.add(sun);
   camera = new THREE.PerspectiveCamera(30, 1, 0.1, 2000);
+  material = createPropMaterial();
+}
+
+/** Holds background thumbnails (prewarm and thumbInto) while `on`; thumbFor still renders. */
+export function pauseThumbs(on: boolean): void {
+  paused = on;
 }
 
 /** Data URL thumbnail of a prop type, rendered once with an offscreen renderer ('' if it cannot). */
@@ -51,7 +61,7 @@ export function thumbFor(t: number, tint = DEFAULT_TINT): string {
   try {
     const geo = geometryFor(t);
     if (mesh) scene.remove(mesh);
-    mesh = new THREE.InstancedMesh(geo, createPropMaterial(), 1);
+    mesh = new THREE.InstancedMesh(geo, material, 1);
     mesh.setMatrixAt(0, new THREE.Matrix4());
     mesh.setColorAt(0, new THREE.Color(tint));
     scene.add(mesh);
@@ -70,7 +80,6 @@ export function thumbFor(t: number, tint = DEFAULT_TINT): string {
     // A lost context draws nothing: return '' rather than cache a blank image for good.
     const url = r.getContext().isContextLost() ? '' : r.domElement.toDataURL('image/png');
     if (url) cache.set(key(t, tint), url);
-    (mesh.material as THREE.Material).dispose();
     mesh.dispose();
     return url;
   } catch {
@@ -87,9 +96,11 @@ export function prewarmThumbs(types: Iterable<number>): void {
   if (pumping || queue.length === 0) return;
   pumping = true;
   const step = () => {
-    const t = queue.shift();
-    if (t !== undefined && !cache.has(key(t, DEFAULT_TINT))) thumbFor(t);
-    if (queue.length) setTimeout(step, 40);
+    if (!paused) {
+      const t = queue.shift();
+      if (t !== undefined && !cache.has(key(t, DEFAULT_TINT))) thumbFor(t);
+    }
+    if (queue.length) setTimeout(step, paused ? 500 : 40);
     else pumping = false;
   };
   setTimeout(step, 40);
@@ -126,6 +137,10 @@ export function thumbInto(img: HTMLImageElement, t: number): HTMLImageElement {
 }
 
 function drawWaiting(): void {
+  if (paused) {
+    requestAnimationFrame(drawWaiting);
+    return;
+  }
   let drawn = 0;
   for (const [t, imgs] of waiting) {
     if (drawn >= PER_FRAME) break;
