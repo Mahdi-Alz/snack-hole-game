@@ -48,7 +48,7 @@ export class Game implements HubApi {
   private pauseMenu: ModalHandle | null = null;
   private frameMs = 0;
   private simMs = 0;
-  private readonly store = new SaveStore();
+  private readonly store: SaveStore;
   /** Per-frame round feedback: sounds, particles, banners, floaters, shake and slow-motion. */
   private readonly fx: RoundFeedback;
   /** Shown while the WebGL context is lost. */
@@ -56,7 +56,8 @@ export class Game implements HubApi {
   private failedFrames = 0;
   private crashed = false;
 
-  constructor() {
+  constructor(onSaved?: (text: string, at: number) => void) {
+    this.store = new SaveStore(onSaved);
     this.save = this.store.load();
     setScientific(this.save.settings.scientific);
     const canvas = document.getElementById('game') as HTMLCanvasElement;

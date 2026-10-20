@@ -1,6 +1,7 @@
 import './ui/styles.css';
 import { Game } from './game';
 import { registerServiceWorker } from './pwa';
+import { inTelegram, setupTelegram } from './telegram';
 import { showFatal } from './ui/fatal';
 
 /** three.js needs WebGL 2; checked up front so players get a message instead of a blank page. */
@@ -21,8 +22,9 @@ if (!hasWebGL2()) {
     [],
   );
 } else {
+  const onSaved = inTelegram() ? await setupTelegram() : undefined;
   try {
-    const game = new Game();
+    const game = new Game(onSaved);
     game.start();
     // Handle for smoke tests and the debug panel; not exposed in release builds.
     if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;

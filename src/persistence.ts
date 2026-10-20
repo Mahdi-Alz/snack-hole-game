@@ -55,6 +55,8 @@ export class SaveStore {
   /** Raw text of a stored save that could not be read (kept aside, reported on start). */
   private unreadable: string | null = null;
 
+  constructor(private readonly onWritten: (text: string, at: number) => void = () => {}) {}
+
   /** Another tab saved the game since this one loaded (or a damaged save could not be kept aside): this tab stops saving. */
   get stale(): boolean {
     return this.isStale;
@@ -127,6 +129,7 @@ export class SaveStore {
     }
     this.lastWritten = text;
     this.lastWriteAt = save.lastSeen;
+    this.onWritten(text, save.lastSeen);
     return true;
   }
 
