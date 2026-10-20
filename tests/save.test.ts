@@ -81,8 +81,12 @@ describe('loading untrusted saves', () => {
     const s = edited({ settings: { volume: 7, quality: 'ultra', shake: 'no', abilitySide: 'top' } });
     expect(s.settings.volume).toBe(1);
     expect(s.settings.quality).toBe('auto');
-    expect(s.settings.abilitySide).toBe('right');
+    expect(s.settings.abilitySide).toBe('left');
     expect(s.settings.shake).toBe(true);
+  });
+
+  it('keeps ability buttons on the right', () => {
+    expect(edited({ settings: { abilitySide: 'right' } }).settings.abilitySide).toBe('right');
   });
 });
 

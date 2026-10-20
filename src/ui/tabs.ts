@@ -319,7 +319,7 @@ function singularityTab(api: HubApi, cards: Card[]): HTMLElement {
       bar.style.width = `${(frac * 100).toFixed(1)}%`;
       barText.textContent = `${formatCash(s.lifetimeCash)} / ${formatCash(next)} lifetime for the next DM`;
       btn.disabled = dm <= 0;
-      const worth = s.dmTotal > 0 && dm >= s.dmTotal * 0.5 ? ' Good time to collapse: +50% or more.' : '';
+      const worth = s.dmTotal > 0 && dm >= s.dmTotal * PRESTIGE.goodGain ? ` Good time to collapse: +${Math.round(PRESTIGE.goodGain * 100)}% or more.` : '';
       const tier = s.tier > 0 || tierUpReady(s) ? ` Tier ${s.tier}${tierUpReady(s) ? ` → ${s.tier + 1} on collapse (${s.tier < PRESTIGE.tierSizeCap ? 'bigger world, ' : ''}x${PRESTIGE.tierScale} payouts and prices, DM x${tierDmMult(s.tier + 1).toFixed(1)})` : ''}.` : '';
       // The next map that waits on Singularities: the reason to collapse at all.
       const gate = MAPS.find((m) => m.needsSingularities > s.stats.prestiges);

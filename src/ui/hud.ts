@@ -47,12 +47,10 @@ export class Hud {
     pauseBtn.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      this.onPause?.();
     });
-    // Keyboard activation (Enter / Space on the focused button) arrives as a click with no pointer.
-    pauseBtn.addEventListener('click', (e) => {
-      if (e.detail === 0) this.onPause?.();
-    });
+    // Opens on click, not pointerdown: a tap's click lands on whatever is under the finger by then,
+    // which would be the menu's backdrop, and that closes the menu at once.
+    pauseBtn.addEventListener('click', () => this.onPause?.());
     this.comboText = h('div', { class: 'combo-text' });
     this.comboMult = h('div', { class: 'combo-mult' });
     this.comboBar = h('div', { class: 'combo-bar-fill' });

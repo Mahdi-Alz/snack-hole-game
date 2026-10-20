@@ -16,6 +16,7 @@ import { OBJECT_TYPES } from '../config/objects';
 
 /** Render resolution: `auto` steps the pixel ratio down while frames run slow. */
 export type Quality = 'auto' | 'high' | 'low';
+/** Corner of the ability buttons on screens that take touch; elsewhere they always stay right. */
 export type AbilitySide = 'right' | 'left';
 
 export interface Settings {
@@ -138,7 +139,7 @@ export function defaultSave(now = Date.now()): SaveData {
       shake: true,
       floaters: true,
       quality: 'auto',
-      abilitySide: 'right',
+      abilitySide: 'left',
     },
     lastSeen: now,
     created: now,
@@ -200,7 +201,7 @@ function clampToGame(s: SaveData): void {
   if (!OBJECT_IDS.has(s.stats.biggestType)) s.stats.biggestType = '';
   s.settings.volume = Math.min(1, s.settings.volume);
   if (!QUALITIES.includes(s.settings.quality)) s.settings.quality = 'auto';
-  if (!ABILITY_SIDES.includes(s.settings.abilitySide)) s.settings.abilitySide = 'right';
+  if (!ABILITY_SIDES.includes(s.settings.abilitySide)) s.settings.abilitySide = 'left';
   s.maps.suburb = true;
   if (!MAPS.some((m) => m.id === s.selectedMap) || s.maps[s.selectedMap] !== true) s.selectedMap = 'suburb';
 }
