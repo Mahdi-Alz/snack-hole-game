@@ -1,7 +1,7 @@
 import type { MapId } from '../config/balance';
 import { mapDef, startLevel, type SingularityPreview } from '../core/economy';
 import { formatCash, formatDuration, formatNumber, formatPercent, formatRate } from '../core/format';
-import type { Quality, SaveData, Settings } from '../core/save';
+import type { AbilitySide, Quality, SaveData, Settings } from '../core/save';
 import type { EndReason } from '../core/world';
 import { h } from './dom';
 
@@ -432,6 +432,7 @@ export interface SettingsApi {
 }
 
 const QUALITY_LABELS: Record<Quality, string> = { auto: 'Auto', high: 'High', low: 'Low (faster)' };
+const SIDE_LABELS: Record<AbilitySide, string> = { right: 'Right', left: 'Left' };
 
 export function showSettings(api: SettingsApi): void {
   const s = api.settings;
@@ -439,6 +440,12 @@ export function showSettings(api: SettingsApi): void {
   quality.value = s.quality;
   quality.addEventListener('change', () => {
     s.quality = quality.value as Quality;
+    api.apply();
+  });
+  const side = h('select', { 'aria-label': 'Ability buttons' }, ...Object.entries(SIDE_LABELS).map(([v, label]) => h('option', { value: v }, label))) as HTMLSelectElement;
+  side.value = s.abilitySide;
+  side.addEventListener('change', () => {
+    s.abilitySide = side.value as AbilitySide;
     api.apply();
   });
   const backupAt = api.backupTime();
@@ -472,6 +479,8 @@ export function showSettings(api: SettingsApi): void {
       toggle('Shadows', 'shadows'),
       toggle('Screen shake', 'shake'),
       toggle('Floating numbers', 'floaters'),
+      // Same query as the CSS that moves the buttons: touch laptops count too.
+      matchMedia('(any-pointer: coarse)').matches ? h('label', { class: 'set-row' }, h('span', null, 'Ability buttons'), side) : null,
       h('div', { class: 'set-sub' }, 'Save data'),
       io,
       h(

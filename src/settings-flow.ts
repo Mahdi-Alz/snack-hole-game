@@ -6,12 +6,13 @@ import type { SaveBackup } from './persistence';
 import type { GameRenderer } from './render/scene';
 import { confirmDialog, showSettings } from './ui/dialogs';
 
-/** Pushes the player's settings to number formatting, audio and graphics. */
+/** Pushes the player's settings to number formatting, audio, graphics and the HUD layout. */
 export function applySettings(st: Settings, audio: Audio, renderer: GameRenderer): void {
   setScientific(st.scientific);
   audio.setVolume(st.volume, st.muted, st.music, st.tunes);
   renderer.setShadows(st.shadows);
   renderer.setQuality(st.quality);
+  document.body.classList.toggle('abilities-left', st.abilitySide === 'left');
 }
 
 export interface SettingsFlow {

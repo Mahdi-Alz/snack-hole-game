@@ -16,6 +16,8 @@ import { OBJECT_TYPES } from '../config/objects';
 
 /** Render resolution: `auto` steps the pixel ratio down while frames run slow. */
 export type Quality = 'auto' | 'high' | 'low';
+/** Corner of the ability buttons on screens that take touch; elsewhere they always stay right. */
+export type AbilitySide = 'right' | 'left';
 
 export interface Settings {
   volume: number;
@@ -29,6 +31,7 @@ export interface Settings {
   shake: boolean;
   floaters: boolean;
   quality: Quality;
+  abilitySide: AbilitySide;
 }
 
 export interface Stats {
@@ -136,6 +139,7 @@ export function defaultSave(now = Date.now()): SaveData {
       shake: true,
       floaters: true,
       quality: 'auto',
+      abilitySide: 'left',
     },
     lastSeen: now,
     created: now,
@@ -171,6 +175,7 @@ function mergeInto<T>(def: T, src: unknown): T {
 const OBJECT_IDS = new Set(OBJECT_TYPES.map((o) => o.id));
 const SKIN_IDS = new Set(SKINS.map((s) => s.id));
 const QUALITIES: readonly Quality[] = ['auto', 'high', 'low'];
+const ABILITY_SIDES: readonly AbilitySide[] = ['right', 'left'];
 
 /** Whole number in [0, max]. */
 function level(v: number, max = Infinity): number {
@@ -196,6 +201,7 @@ function clampToGame(s: SaveData): void {
   if (!OBJECT_IDS.has(s.stats.biggestType)) s.stats.biggestType = '';
   s.settings.volume = Math.min(1, s.settings.volume);
   if (!QUALITIES.includes(s.settings.quality)) s.settings.quality = 'auto';
+  if (!ABILITY_SIDES.includes(s.settings.abilitySide)) s.settings.abilitySide = 'left';
   s.maps.suburb = true;
   if (!MAPS.some((m) => m.id === s.selectedMap) || s.maps[s.selectedMap] !== true) s.selectedMap = 'suburb';
 }
