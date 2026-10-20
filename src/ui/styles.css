@@ -51,7 +51,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .btn.danger { background: linear-gradient(180deg, #ff7a86, #e8445a); color: #fff; box-shadow: 0 4px 0 #b8243a; }
 .btn.big { font-size: 20px; padding: 14px 40px; margin-top: 14px; }
 .icon-btn { pointer-events: auto; border: 0; background: rgba(255,255,255,.9); width: 42px; height: 42px; border-radius: 50%; font-size: 20px; cursor: pointer; box-shadow: var(--shadow); }
-.icon-btn:hover { transform: rotate(30deg); transition: transform .3s; }
+/* Only where a pointer can hover: touch screens keep :hover on the last tapped button, which left it tilted. */
+@media (hover: hover) { .icon-btn:hover { transform: rotate(30deg); transition: transform .3s; } }
 
 /* ------------------------------------------------------------------ hub */
 .hub { position: absolute; inset: 0; }
