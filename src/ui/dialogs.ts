@@ -1,7 +1,7 @@
 import type { MapId } from '../config/balance';
 import { mapDef, startLevel, type SingularityPreview } from '../core/economy';
 import { formatCash, formatDuration, formatNumber, formatPercent, formatRate } from '../core/format';
-import type { Quality, SaveData, Settings } from '../core/save';
+import type { AbilitySide, Quality, SaveData, Settings } from '../core/save';
 import type { EndReason } from '../core/world';
 import { h } from './dom';
 
@@ -441,6 +441,12 @@ export function showSettings(api: SettingsApi): void {
     s.quality = quality.value as Quality;
     api.apply();
   });
+  const side = h('select', { 'aria-label': 'Ability buttons' }, h('option', { value: 'right' }, 'Right'), h('option', { value: 'left' }, 'Left')) as HTMLSelectElement;
+  side.value = s.abilitySide;
+  side.addEventListener('change', () => {
+    s.abilitySide = side.value as AbilitySide;
+    api.apply();
+  });
   const backupAt = api.backupTime();
   const toggle = (label: string, key: keyof Settings) => {
     const input = h('input', { type: 'checkbox' }) as HTMLInputElement;
@@ -472,6 +478,7 @@ export function showSettings(api: SettingsApi): void {
       toggle('Shadows', 'shadows'),
       toggle('Screen shake', 'shake'),
       toggle('Floating numbers', 'floaters'),
+      matchMedia('(pointer: coarse)').matches ? h('label', { class: 'set-row' }, h('span', null, 'Ability buttons'), side) : null,
       h('div', { class: 'set-sub' }, 'Save data'),
       io,
       h(

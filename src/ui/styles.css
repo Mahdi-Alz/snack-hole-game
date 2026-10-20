@@ -366,6 +366,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
   .tab-bar::-webkit-scrollbar { display: none; }
   .tab-btn { flex: 0 0 auto; min-width: 44px; min-height: 44px; justify-content: center; }
   .buy { min-height: 44px; }
+  body.abilities-left .hud-abilities { right: auto; left: calc(16px + var(--sal)); }
 }
 
 /* ------------------------------------------------------------------ reduced motion */

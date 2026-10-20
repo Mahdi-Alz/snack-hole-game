@@ -12,6 +12,7 @@ export function applySettings(st: Settings, audio: Audio, renderer: GameRenderer
   audio.setVolume(st.volume, st.muted, st.music, st.tunes);
   renderer.setShadows(st.shadows);
   renderer.setQuality(st.quality);
+  document.body.classList.toggle('abilities-left', st.abilitySide === 'left');
 }
 
 export interface SettingsFlow {

@@ -78,9 +78,10 @@ describe('loading untrusted saves', () => {
   });
 
   it('falls back to safe settings', () => {
-    const s = edited({ settings: { volume: 7, quality: 'ultra', shake: 'no' } });
+    const s = edited({ settings: { volume: 7, quality: 'ultra', shake: 'no', abilitySide: 'top' } });
     expect(s.settings.volume).toBe(1);
     expect(s.settings.quality).toBe('auto');
+    expect(s.settings.abilitySide).toBe('right');
     expect(s.settings.shake).toBe(true);
   });
 });
