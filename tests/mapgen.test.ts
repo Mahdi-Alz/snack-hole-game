@@ -26,7 +26,7 @@ const PINNED: Record<MapId, string> = {
   downtown: '43546087',
   farm: 'c4970a1a',
   harbor: '2eedbd16',
-  airport: 'ecf080b7',
+  airport: '2a7cab5f',
   moon: 'a0480040',
 };
 

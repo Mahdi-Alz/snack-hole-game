@@ -71,7 +71,7 @@ export function generateAirport(seed: number): MapData {
   b.graphMover('jet', loop, 0, 10, { tint: 0x3b82f6 });
   b.graphMover('smallplane', loop, 0, 9, { tint: 0xe84a4a });
   b.graphMover('smallplane', loop, 0, 9, { tint: 0x38c172 });
-  b.graphMover('jumbo', loop, 0, 8, { tint: 0xe84a4a });
+  b.graphMover('jumbo', loop, 0, 8, { tint: 0xe84a4a, scale: 0.98 });
 
   // ---------------------------------------------------------------- terminal & gates
   b.put('terminal', 0, 34, Math.PI, { force: true });
