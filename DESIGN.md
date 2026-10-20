@@ -30,12 +30,12 @@ from that round. Ending it from the pause menu does count.
 - `World.reachable()` works out what the hole can still eat: the props that fit now, plus the
   ones it would fit after growing on all of those (smallest first, one pass to the fixed point),
   plus what Mega Mouth would fit while it is active or recharges before time runs out.
-- Every 0.5 s the round checks it. It is **snacked out** when nothing is reachable, or when no
-  more growth is possible and the reachable leftovers would pay less than 5% of the round's cash
-  so far. Round cash includes combo, so the leftovers are valued at the combo cap. A random event
-  still to come starts at once instead. Crumbs never end a round on a map that has not been
-  cleared yet while everything left on it is reachable, so the last few % of its 100% stay
-  playable.
+- Every 0.5 s the round checks it. It is **snacked out** when nothing is reachable; a random event
+  still to come starts at once instead. Crumbs the hole cannot grow on keep the round going:
+  ending while something still fits reads as a bug, so quitting is left to the pause menu.
+- The sim's player quits that way (no time bonus) once no more growth is possible and the
+  reachable leftovers would pay less than 5% of the round's cash so far, valued at the combo cap
+  since round cash includes combo. On a map not cleared yet it plays on to 100%.
 - Finishing early (snacked out or map cleared) pays a time bonus of +1% of the round's cash per
   second left, up to +50%.
 

@@ -373,6 +373,7 @@ export function showResults(r: RoundResult, onContinue: () => void): void {
     { class: 'results' },
     h('div', { class: 'res-title' }, r.endReason === 'cleared' ? '🍽️ MAP CLEARED!' : r.endReason === 'snackedOut' ? '😋 ALL SNACKED OUT!' : "TIME'S UP!"),
     h('div', { class: 'res-sub' }, r.mapName),
+    r.endReason === 'snackedOut' ? h('div', { class: 'res-hint' }, 'Everything left is too big. Upgrade Starting Size to come back bigger.') : null,
     cashEl,
     r.timeBonus > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.timeBonus)} time bonus for finishing early`) : null,
     r.helperCash > 0 ? h('div', { class: 'res-small' }, `incl. ${formatCash(r.helperCash)} from helper holes`) : null,

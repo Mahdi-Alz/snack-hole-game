@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GOLDEN, MAPS, ROUND_END, SAVE_VERSION, SIZE } from '../src/config/balance';
+import { GOLDEN, MAPS, SAVE_VERSION, SIZE } from '../src/config/balance';
 import { OBJECT_TYPES, footprintOf, typeId } from '../src/config/objects';
 import { Bot } from '../src/core/bot';
 import { buildRoundConfig, radiusForLevel, timeBonusFrac } from '../src/core/economy';
@@ -163,27 +163,12 @@ describe('round end', () => {
     expect(new World(ladderMap(0, big), buildRoundConfig(s)).reachableLeft()).toBe(1);
   });
 
-  it('counts the round as done when it cannot grow and only crumbs are left, valued at the combo cap', () => {
-    const w = new World(ladderMap(3, 0.3), cfg(12, true));
+  it('keeps the round going while anything fits, even crumbs it cannot grow on', () => {
+    const w = new World(ladderMap(3, fitAt(20)), cfg(12, true));
+    w.cash = 1e12;
     expect(w.reachable().levels).toBe(0);
     expect(w.snackedOut()).toBe(false);
-    // Round cash includes combo, so the leftovers count at the best combo they could pay.
-    const crumbsAt = (w.reachable().cash * w.cfg.comboCap) / ROUND_END.crumbs;
-    w.cash = crumbsAt * 0.9;
-    expect(w.snackedOut()).toBe(false);
-    w.cash = crumbsAt * 1.1;
-    expect(w.snackedOut()).toBe(true);
-  });
-
-  it('lets crumbs finish a map that was never cleared, while everything left is edible', () => {
-    const w = new World(ladderMap(3, 0.3), cfg(12));
-    w.cash = 1e12;
-    expect(w.snackedOut()).toBe(false);
-    // Part of the map out of reach: 100% is not possible this round, so crumbs end it again.
-    const far = new World(ladderMap(3, fitAt(20)), cfg(12));
-    far.cash = 1e12;
-    expect(far.reachable().levels).toBe(0);
-    expect(far.snackedOut()).toBe(true);
+    expect(new World(ladderMap(0, fitAt(20)), cfg(12, true)).snackedOut()).toBe(true);
   });
 
   it('finishes early with a time bonus once nothing reachable is left', () => {

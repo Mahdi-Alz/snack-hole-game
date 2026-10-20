@@ -381,7 +381,7 @@ export interface AbilityConfig {
 
 export interface RoundConfig {
   mapId: MapId;
-  /** The map was cleared (100%) in an earlier round, so leftover crumbs may end a round early. */
+  /** The map was cleared (100%) in an earlier round. */
   mapCleared: boolean;
   mapMul: number;
   roundTime: number;

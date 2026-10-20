@@ -239,6 +239,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .res-sub { font-weight: 800; color: var(--ink-soft); }
 .res-cash { font-size: 48px; font-weight: 900; color: var(--green-dark); margin: 6px 0; font-variant-numeric: tabular-nums; }
 .res-small { font-size: 12px; color: var(--ink-soft); font-weight: 700; margin-top: -6px; }
+.res-hint { font-size: 12px; color: var(--ink-soft); font-weight: 700; margin-top: 4px; }
 .res-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .res-stat { background: var(--card-2); border-radius: 14px; padding: 8px; }
 .res-stat.big { grid-column: 1 / -1; }

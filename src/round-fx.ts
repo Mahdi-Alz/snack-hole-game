@@ -200,7 +200,7 @@ export class RoundFeedback {
         case 'snackedOut':
           hud.hideHint();
           audio.whistle();
-          hud.banner('ALL SNACKED OUT!', e.bonusFrac > 0 ? `Time bonus +${Math.round(e.bonusFrac * 100)}%` : 'Nothing left your size', 'big');
+          hud.banner('ALL SNACKED OUT!', `Nothing left your size${e.bonusFrac > 0 ? ` · Time bonus +${Math.round(e.bonusFrac * 100)}%` : ''}`, 'big');
           break;
         case 'end':
           this.d.onEnd();

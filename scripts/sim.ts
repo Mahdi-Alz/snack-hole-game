@@ -10,7 +10,7 @@
  *   npm run sim -- --moon            # hold the first Singularity until Moon Base is unlocked
  *   npm run sim -- --seed 7          # different (but reproducible) world seeds
  */
-import { ABILITIES, DM_UPGRADES, HELPERS, MAPS, SIZE, UPGRADES, type MapId } from '../src/config/balance';
+import { ABILITIES, DM_UPGRADES, HELPERS, MAP_CLEARED_FRACTION, MAPS, ROUND_END, SIZE, UPGRADES, type MapId } from '../src/config/balance';
 import { checkAchievements } from '../src/core/achievements';
 import { Bot } from '../src/core/bot';
 import * as eco from '../src/core/economy';
@@ -66,6 +66,20 @@ interface RoundStats {
   unlocked: MapId[];
 }
 
+/**
+ * The player ends the round from the pause menu once the hole cannot grow any more and only crumbs
+ * are left: worth less than this share of the round's cash so far. Round cash includes combo, so
+ * the crumbs are valued at the combo cap. A map not cleared before is played out to 100%, and a
+ * random event in progress may still bring snacks.
+ */
+const QUIT_CRUMBS = 0.05;
+function onlyCrumbsLeft(w: World): boolean {
+  const r = w.reachable();
+  if (r.count === 0 || w.eventId) return false;
+  if (!w.cfg.mapCleared && w.weightEaten + r.weight >= w.weightTotal * MAP_CLEARED_FRACTION) return false;
+  return r.levels === 0 && r.cash * w.cfg.comboCap < w.cash * QUIT_CRUMBS;
+}
+
 function playRound(save: SaveData, p: Profile, record = true): RoundStats {
   const cfg = eco.buildRoundConfig(save);
   const w = new World(generateMap(save.selectedMap), cfg, { seed: rng.int(1, 1e6) });
@@ -73,11 +87,17 @@ function playRound(save: SaveData, p: Profile, record = true): RoundStats {
   const levelTimes: number[] = [];
   let lastEat = 0;
   let endAt = 0;
+  let quitCheck = ROUND_END.checkEvery;
   while (!w.ended) {
     const inp = bot.steer(w, DT);
     w.input = { x: inp.x * p.stick, z: inp.z * p.stick };
     for (const a of ABILITIES) if (w.abilityReady(a.id) && rng.chance(p.abilityChance)) w.useAbility(a.id);
     w.step(DT);
+    if (w.running && (quitCheck -= DT) <= 0) {
+      quitCheck = ROUND_END.checkEvery;
+      // As the pause menu's End round does.
+      if (onlyCrumbsLeft(w)) w.timeLeft = 0;
+    }
     for (const e of w.events) {
       if (e.k === 'level') levelTimes.push(w.time);
       else if (e.k === 'eat' && e.hole === 0) lastEat = w.time;

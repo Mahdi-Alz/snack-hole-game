@@ -475,18 +475,12 @@ export class World {
   }
 
   /**
-   * The round is over once nothing reachable is left, or once the hole cannot grow any more and
-   * only crumbs remain (worth less than `crumbs` of what this round has paid so far). Round cash
-   * already includes combo, so the leftovers are valued at the combo cap: a map with plenty left
-   * lets the player build the combo back up, and judging them before combo ends rounds early.
-   * Crumbs never end a round that can still clear a map not cleared before: they are the last
-   * few % of its 100%.
+   * The round is over once nothing reachable is left. Crumbs the hole cannot grow on keep it going:
+   * ending a round while something still fits reads as a bug to players, and quitting from the
+   * pause menu is theirs to choose.
    */
   snackedOut(): boolean {
-    const r = this.reachable();
-    if (r.count === 0) return true;
-    if (!this.cfg.mapCleared && this.weightEaten + r.weight >= this.weightTotal * MAP_CLEARED_FRACTION) return false;
-    return r.levels === 0 && r.cash * this.cfg.comboCap < this.cash * ROUND_END.crumbs;
+    return this.reachable().count === 0;
   }
 
   // ------------------------------------------------------------ abilities
