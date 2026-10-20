@@ -270,6 +270,8 @@ export class World {
   private readonly roundEvents: RoundEvents;
   /** Static props the magnet moved during a grid query; re-filed after it so none is visited twice. */
   private readonly pulled: WObj[] = [];
+  /** Road vehicles among the movers, in mover order, rebuilt each step: all senseTraffic looks at. */
+  private readonly roads: WObj[] = [];
 
   constructor(
     readonly map: MapData,
@@ -424,6 +426,8 @@ export class World {
     const grow = { level: this.main.level, xp: this.main.xp };
     let r = radiusForLevel(grow.level);
     let fit = mouth * r;
+    // XP for the next level, kept between level-ups: spendXp only runs once it is reached.
+    let need = xpForLevel(grow.level);
     let count = 0;
     let cash = 0;
     let weight = 0;
@@ -434,9 +438,10 @@ export class World {
       cash += o.value * this.cfg.cashMult;
       weight += o.w;
       grow.xp += o.xp * this.cfg.xpMult * frontierXpMult(o.f, r);
-      if (spendXp(grow, this.cfg.maxLevel)) {
+      if (grow.xp >= need && spendXp(grow, this.cfg.maxLevel)) {
         r = radiusForLevel(grow.level);
         fit = mouth * r;
+        need = xpForLevel(grow.level);
       }
     }
     return { count, levels: grow.level - this.main.level, cash, weight };
@@ -649,7 +654,7 @@ export class World {
         o.sense -= dt;
         if (o.sense <= 0) {
           o.sense = SENSE_EVERY;
-          senseTraffic(o, this.movers, this.map.graphs);
+          senseTraffic(o, this.roads, this.map.graphs);
         }
         speed *= o.brake;
       }
@@ -951,6 +956,11 @@ export class World {
     main.r += (main.baseR * mega - main.r) * kr;
 
     const movers = this.movers;
+    // senseTraffic only watches road vehicles; scanning every mover for each one cost more than the
+    // rest of the step.
+    const roads = this.roads;
+    roads.length = 0;
+    for (let i = 0; i < movers.length; i++) if (movers[i].mv === MV_GRAPH && !movers[i].flee) roads.push(movers[i]);
     for (let i = 0; i < movers.length; i++) this.updateMover(movers[i], dt);
     this.roundEvents.update(dt);
 

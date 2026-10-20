@@ -260,6 +260,8 @@ export const PRESTIGE = {
   tierScale: 4,
   tierDmBonus: 0.1,
   tierSizeCap: 10,
+  /** The Singularity panel calls a gain of this share of all DM earned a good time to collapse. */
+  goodGain: 0.5,
 };
 
 export type DmUpgradeId =

@@ -213,43 +213,68 @@ Singularity (recent income starts low again). Time with the tab hidden counts th
   each completed set gives +5% cash.
 - 42 trophies, each +2% cash; seven also unlock skins (four of them for Singularity tiers).
 
-## Pacing (from `npm run sim -- --runs 6 --human --report`)
+## Pacing (from `npm run sim -- --human --runs 6 --seeds 1-10`, and `--good`)
 
-`npm run sim` plays real rounds with a greedy bot (same World + map generators) that shops
-cheapest-first (Head Start cash before a run's first round) and collapses once the DM gain is
-+50% of all DM it has earned and progress has stalled (the next map needs a Singularity, or 4 rounds
-without a better size). `--human` = slower re-targeting, 80% stick input, rare ability use and
-20 s per shop visit. `--report` checks the pacing targets (PASS/FAIL), `--trace` prints each
-round's level-up times, `--seed` changes the world seeds.
+`npm run sim` plays real rounds with a greedy bot (same World + map generators). It steers for
+the most size XP per distance (map goals are sizes; chasing cash instead reached Moon Base 10–15%
+later), shops cheapest-first (Head Start cash before a run's first round; return-per-cost
+ordering was at most ~7% faster), skips what only pays while away (Offline Vault, Hawking
+Radiation: the sim never leaves the game) and collapses once the DM gain reaches the panel's hint
+(`PRESTIGE.goodGain`, +50% of all DM it has earned, and at least 3 DM) and progress has stalled:
+the newest map's goal is reached and the next map (or, past Moon Base, the next tier) needs a
+Singularity, or 4 rounds without a better size. Collapsing at the first stall is about the
+fastest way through: collapsing as soon as 1–2 DM are on offer, or holding out for 6–8, reaches
+Moon Base later. A run that reaches 150 rounds without a Singularity stops the sim and fails the
+report.
 
-| Event (human model) | Time |
-|---|---|
-| Growth Rate, Magnet | 2:40 |
-| Happy Farm | 5:30 |
-| first helper | 7:00 |
-| Downtown | 15:30 |
-| Harbor | 33:00 |
-| first Singularity (+8 DM) | 46:26 |
-| Airport (run 2) | 1h 05m |
-| Moon Base (run 4) | 2h 01m |
-| first tier (run 4 collapse) | 2h 25m |
+Two player profiles, since pacing has to suit both:
 
-Targets met in the latest report (11/17): first size-up ≤ 5 s (3.3 s), 4–8 s per level (4.0 s),
-last level ≤ 1.5x the first (1.02x; the first size-up is scaled to a full level's XP), no dead
-time, 1–3 purchases per shop visit (3), Starting Size costing 0.3–1.5 rounds (0.62), first
-Singularity at 46 min, run 2 back to Harbor in 42% of run 1's time, DM per run growing at most x2
-(8, 6, 7, 11, 17, 27), all maps at 2h 01m, 8 h offline = 4 rounds. `--seed 2` and `--seed 3` give
-12; any change to the sim's random draws reshuffles which borderline targets pass.
-Misses: radius growth per round 7.4x (target 3–5x, which needs 7+ s per level in a 100 s round,
-and Downtown/Harbor goals sit 16–20 sizes above their entry level); 90% of visits buying something
-or able to after one more round, counting cash left over (89%: late runs spend many rounds on
-cleared maps with only Starting Size left to buy, until the sim's +50% DM rule lets it collapse);
-cheapest option left 0.53 rounds of income (target 1–3: run 1 income doubles every round across
-~10 open tracks and later runs buy 10–30 levels per visit on the early maps); 4–8 rounds per map
-in run 1 (4, 6, 9: Downtown took 9); run 3 reaches the Airport in 76% of run 2's time (target
-25–55%: each run adds only ~+50% DM, about 1.3x income, and both runs clear the early maps at
-about one round per map); skill band 1.09–1.49x (target 1.5–3: a 1.4-skill bot gains only 0.5–2
-more sizes per round than a 0.6-skill one, so the band is mostly round-to-round noise).
+- `--human`, a casual player: 80% stick input, an ability fires about 5 s after it is ready
+  (0.2 casts/s), 20 s per results + shop visit. Targets that guard against stalling are meant
+  for it.
+- `--good`: full stick (keys, or the mouse past 24% of the screen's short side), abilities tapped
+  the moment they are ready, steering into dense patches (cluster XP within 1.5 hole radii).
+  Targets that guard against goals falling in one round are meant for it.
+
+`--report` checks the pacing targets (PASS/FAIL), `--trace` prints each round's level-up times,
+`--seed` changes the world seeds, and `--seeds 1-10` runs the report once per seed in parallel and
+prints them side by side. Seeds spread the timings by ±15%, so a balance decision needs 10 seeds
+and a target needs margin, not one seed's pass. World seeds, ability rolls and the bot's own
+randomness come from separate streams, and the sim's clock counts the end delay while the last
+props fall. Its minutes are still a lower bound: menus, the Singularity dialog and first-landmark
+slow motion are not counted.
+
+Pacing aims for steady progress, not a total length: every round until a map's goal should beat
+the best size so far, a goal should take a few rounds rather than one, and a run should end soon
+after its last goal.
+
+| Seeds 1–10, median (range) | `--human` | `--good` |
+|---|---|---|
+| first Singularity | 40:36 (33:21–45:51) | 21:03 (17:05–22:24) |
+| Moon Base (run 4) | 1h 52m (1h 36m–2h 06m) | 59:01 (56:31–1h 06m) |
+| run 2 rounds to the Harbor goal | 3 (2–4) | 2 (1–3) |
+| seconds per level after the first | 3.50–3.88 | 2.70–2.95 |
+| targets met | 11–14 of 22 | 8–11 of 22 |
+
+Rounds to reach each map's goal, seed 1, `--human` (- = not reached that run):
+
+| Run | Suburb | Farm | Downtown | Harbor | Airport | Moon Base | Run length |
+|---|---|---|---|---|---|---|---|
+| 1 | 5 | 5 | 6 | - | | | 38:45 (22 rounds) |
+| 2 | 3 | 2 | 2 | 3 | 5 | | 27:22 (15) |
+| 3 | 2 | 2 | 1 | 2 | 2 | | 36:12 (20) |
+| 4 | 2 | 1 | 2 | 1 | 1 | 1 | 39:18 (25) |
+| 5 | 2 | 1 | 1 | 1 | 4 | 1 | 36:58 (22) |
+| 6 | 2 | 1 | 1 | 2 | 1 | 1 | 25:50 (16) |
+
+The Harbor and Moon Base goals sit at their maps' XP ceilings: with `--human` they are reached
+with 96–100% of Harbor and 95–100% of Moon Base eaten, some first visits never reach Harbor's
+goal, stuck streaks run up to 4 rounds, and runs grind 6–21 rounds on a finished map after their
+last goal while the DM gain climbs to the +50% hint. Other misses: 3.5–3.9 s per level (target
+4–8), cheapest option left at 0.32–0.95 rounds of income (target 1–3), run 3 reaching the Airport
+in 56–87% of run 2's time (target 25–55%), rounds to each goal (first visit 2–8, later runs 2–4),
+and the skill band (target 1.5–3; re-targeting speed alone barely changes income). `--good`
+reaches Moon Base in about an hour, roughly 45% sooner than `--human`.
 
 ## Architecture
 

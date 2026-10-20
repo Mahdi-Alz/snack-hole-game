@@ -63,6 +63,10 @@ export function senseTraffic(o: WObj, movers: readonly WObj[], graphs: readonly 
     const qd = OBJECT_TYPES[q.t];
     const ql = qd.w * q.s * 0.5;
     const qw = qd.d * q.s * 0.5;
+    // Cheap early out: ql + qw bounds both extents `look` uses below, so this skips only vehicles
+    // that check would skip too, without paying for its hypot.
+    const far = reach + ql + qw + q.speed * AHEAD;
+    if (Math.abs(dx) > far || Math.abs(dz) > far) continue;
     // Half diagonal: how far q's corners swing out while it turns on the spot. That is more than GAP
     // past its length only for wide vehicles (planes); road vehicles turn inside their junction.
     const qr = Math.hypot(ql, qw);
