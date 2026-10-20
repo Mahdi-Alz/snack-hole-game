@@ -70,7 +70,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 .play-btn:active { transform: translateY(4px); box-shadow: 0 3px 0 #0d5c2f; }
 .play-icon { font-size: 28px; }
 @keyframes playPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-.play-info { color: #fff; font-weight: 800; font-size: 14px; background: rgba(20, 10, 50, .45); padding: 4px 14px; border-radius: 999px; }
+.play-info { color: #fff; font-weight: 800; font-size: 14px; background: rgba(20, 10, 50, .45); padding: 4px 14px; border-radius: 999px; margin-top: 12px; }
 
 .panel { position: absolute; right: calc(14px + var(--sar)); top: calc(70px + var(--sat)); bottom: calc(14px + var(--sab)); width: 400px; background: rgba(250, 248, 255, 0.92); backdrop-filter: blur(8px); border-radius: 22px; box-shadow: 0 10px 40px rgba(20, 5, 60, .35); display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; }
 .tab-bar { display: flex; flex-wrap: wrap; gap: 2px; padding: 10px 8px 6px; border-bottom: 2px solid #ebe5ff; }
