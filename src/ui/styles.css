@@ -205,13 +205,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
 /* ------------------------------------------------------------------ toasts */
 .toasts { position: absolute; left: calc(14px + var(--sal)); bottom: calc(14px + var(--sab)); display: flex; flex-direction: column; gap: 8px; z-index: 70; max-width: 320px; pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 14px; padding: 8px 14px 8px 8px; box-shadow: var(--shadow); animation: toastIn .35s cubic-bezier(.2, 1.4, .4, 1); transition: opacity .4s, transform .4s; }
-.toast.out { opacity: 0; transform: translateX(-30px); }
+.toast.out { opacity: 0; transform: translateX(calc(-30px * var(--toast-dir, 1))); }
 .toast.ach { background: linear-gradient(180deg, #fff8dc, #ffeaa0); }
 .toast-img { width: 44px; height: 44px; }
 .toast-icon { width: 44px; height: 44px; display: grid; place-items: center; font-size: 26px; background: var(--card-2); border-radius: 10px; }
 .toast-title { font-weight: 900; font-size: 14px; }
 .toast-body { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-@keyframes toastIn { from { opacity: 0; transform: translateX(-40px) scale(.9); } }
+@keyframes toastIn { from { opacity: 0; transform: translateX(calc(-40px * var(--toast-dir, 1))) scale(.9); } }
 
 /* ------------------------------------------------------------------ modals */
 .modal-layer { position: absolute; inset: 0; z-index: 60; }
@@ -366,7 +366,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1033; fon
   .tab-bar::-webkit-scrollbar { display: none; }
   .tab-btn { flex: 0 0 auto; min-width: 44px; min-height: 44px; justify-content: center; }
   .buy { min-height: 44px; }
+}
+/* Ability buttons on the left (the default; Settings can keep them right), on any screen that takes
+   touch. In-round toasts move to the free bottom-right corner so they never cover the buttons. */
+@media (any-pointer: coarse) {
   body.abilities-left .hud-abilities { right: auto; left: calc(16px + var(--sal)); }
+  body.abilities-left.in-round .toasts { left: auto; right: calc(14px + var(--sar)); --toast-dir: -1; }
 }
 
 /* ------------------------------------------------------------------ reduced motion */
